@@ -3,8 +3,7 @@
 # sovereign - Server Management CLI
 
 PROJECT_ROOT=$(dirname "$(readlink -f "$0")")
-CORE_DIR="$PROJECT_ROOT/core"
-APPS_DIR="$PROJECT_ROOT/apps"
+PLATFORM="podman" # Default platform
 
 function usage() {
     echo "Usage: sovereign [command] [target]"
@@ -16,10 +15,9 @@ function usage() {
     echo "  ps               List running services"
     echo "  logs [target]    Show logs for a service"
     echo ""
-    echo "Targets:"
+    echo "Targets (for Podman):"
     echo "  core/traefik"
     echo "  core/smtp"
-    echo "  apps/jellyfin"
     echo "  apps/immich"
     echo "  ..."
 }
@@ -33,31 +31,31 @@ target=$2
 
 case $command in
     up)
-        if [ -d "$PROJECT_ROOT/$target" ]; then
-            cd "$PROJECT_ROOT/$target" && podman compose up -d
+        if [ -d "$PROJECT_ROOT/$PLATFORM/$target" ]; then
+            cd "$PROJECT_ROOT/$PLATFORM/$target" && podman compose up -d
         else
-            echo "Target $target not found."
+            echo "Target $PLATFORM/$target not found."
         fi
         ;;
     down)
-        if [ -d "$PROJECT_ROOT/$target" ]; then
-            cd "$PROJECT_ROOT/$target" && podman compose down
+        if [ -d "$PROJECT_ROOT/$PLATFORM/$target" ]; then
+            cd "$PROJECT_ROOT/$PLATFORM/$target" && podman compose down
         else
-            echo "Target $target not found."
+            echo "Target $PLATFORM/$target not found."
         fi
         ;;
     restart)
-        if [ -d "$PROJECT_ROOT/$target" ]; then
-            cd "$PROJECT_ROOT/$target" && podman compose restart
+        if [ -d "$PROJECT_ROOT/$PLATFORM/$target" ]; then
+            cd "$PROJECT_ROOT/$PLATFORM/$target" && podman compose restart
         else
-            echo "Target $target not found."
+            echo "Target $PLATFORM/$target not found."
         fi
         ;;
     logs)
-        if [ -d "$PROJECT_ROOT/$target" ]; then
-            cd "$PROJECT_ROOT/$target" && podman compose logs -f
+        if [ -d "$PROJECT_ROOT/$PLATFORM/$target" ]; then
+            cd "$PROJECT_ROOT/$PLATFORM/$target" && podman compose logs -f
         else
-            echo "Target $target not found."
+            echo "Target $PLATFORM/$target not found."
         fi
         ;;
     ps)
