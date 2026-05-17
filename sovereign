@@ -127,6 +127,27 @@ function do_stats() {
     podman ps --format "table {{.Names}}\t{{.Status}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 }
 
+function do_upgrade() {
+    log "Upgrading Sovereign CLI from GitHub..."
+    local tmp_file=$(mktemp)
+    
+    if curl -s -f "$GITHUB_RAW/sovereign" -o "$tmp_file"; then
+        local current_exe=$(readlink -f "$0")
+        chmod +x "$tmp_file"
+        
+        # Move the new version to the current executable location
+        if mv "$tmp_file" "$current_exe"; then
+            log "Sovereign has been upgraded successfully!"
+            exit 0
+        else
+            error "Failed to replace the executable. Try running with sudo if installed in /usr/local/bin."
+        fi
+    else
+        rm -f "$tmp_file"
+        error "Failed to download the latest version from GitHub."
+    fi
+}
+
 function usage() {
     echo "Sovereign CLI - GitHub Edition"
     echo ""
@@ -136,6 +157,7 @@ function usage() {
     echo "  setup            Interactive setup"
     echo "  list             List available recipes from GitHub"
     echo "  install <pkg>    Install a recipe (e.g., immich, core/traefik)"
+    echo "  upgrade          Update Sovereign CLI to the latest version"
     echo "  stats            System monitoring"
     echo "  ps               List active services"
     echo "  down <pkg>       Stop a service"
@@ -148,6 +170,7 @@ function usage() {
 case $1 in
     setup)       do_setup ;;
     list)        do_list ;;
+    upgrade)     do_upgrade ;;
     install|up)  do_install "$2" ;;
     stats)       do_stats ;;
     ps)          podman ps --filter "label=com.docker.compose.project" ;;
