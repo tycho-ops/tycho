@@ -308,7 +308,11 @@ function do_list() {
 
 function do_stats() {
     log "Server Statistics ($(whoami)):"
-    podman ps --format "table {{.Names}}\t{{.Status}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+    echo "--- Status ---"
+    podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    echo ""
+    echo "--- Resources ---"
+    podman stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
 }
 
 function do_upgrade() {
