@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# sovereign - Server Management CLI
+
+PROJECT_ROOT=$(dirname "$(readlink -f "$0")")
+CORE_DIR="$PROJECT_ROOT/core"
+APPS_DIR="$PROJECT_ROOT/apps"
+
+function usage() {
+    echo "Usage: sovereign [command] [target]"
+    echo ""
+    echo "Commands:"
+    echo "  up [target]      Start a service (core or app)"
+    echo "  down [target]    Stop a service"
+    echo "  restart [target] Restart a service"
+    echo "  ps               List running services"
+    echo "  logs [target]    Show logs for a service"
+    echo ""
+    echo "Targets:"
+    echo "  core/traefik"
+    echo "  core/smtp"
+    echo "  apps/jellyfin"
+    echo "  apps/immich"
+    echo "  ..."
+}
+
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+fi
+
+command=$1
+target=$2
+
+case $command in
+    up)
+        if [ -d "$PROJECT_ROOT/$target" ]; then
+            cd "$PROJECT_ROOT/$target" && podman compose up -d
+        else
+            echo "Target $target not found."
+        fi
+        ;;
+    down)
+        if [ -d "$PROJECT_ROOT/$target" ]; then
+            cd "$PROJECT_ROOT/$target" && podman compose down
+        else
+            echo "Target $target not found."
+        fi
+        ;;
+    restart)
+        if [ -d "$PROJECT_ROOT/$target" ]; then
+            cd "$PROJECT_ROOT/$target" && podman compose restart
+        else
+            echo "Target $target not found."
+        fi
+        ;;
+    logs)
+        if [ -d "$PROJECT_ROOT/$target" ]; then
+            cd "$PROJECT_ROOT/$target" && podman compose logs -f
+        else
+            echo "Target $target not found."
+        fi
+        ;;
+    ps)
+        podman ps --filter "label=com.docker.compose.project"
+        ;;
+    *)
+        usage
+        ;;
+esac

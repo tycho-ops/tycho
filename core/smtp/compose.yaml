@@ -1,0 +1,14 @@
+# sovereign/core/smtp/compose.yaml
+services:
+  smtp:
+    image: docker.io/mwader/postfix-relay:latest
+    container_name: smtp_relay
+    restart: always
+    environment:
+      - POSTFIX_myhostname=${SMTP_HOSTNAME}
+      - POSTFIX_relayhost=${SMTP_RELAYHOST}
+      - POSTFIX_relayhost_auth_user=${SMTP_USER}
+      - POSTFIX_relayhost_auth_password=${SMTP_PASSWORD}
+      - OPENDKIM_DOMAINS=${DOMAIN_NAME}
+    ports:
+      - "127.0.0.1:25:25"
