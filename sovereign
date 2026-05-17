@@ -3,7 +3,7 @@
 # sovereign - Autonomous Server Management CLI (GitHub backed)
 
 # Configuration
-REPO_USER="your-github-user" # User should change this
+REPO_USER="crapougnax"
 REPO_NAME="sovereign"
 REPO_BRANCH="master"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
