@@ -27,6 +27,42 @@ function check_env() {
     fi
 }
 
+function check_port_conflicts() {
+    local ports=("$@")
+    for port in "${ports[@]}"; do
+        if ss -tulpn 2>/dev/null | grep -q ":$port "; then
+            return 0 # Conflict found
+        fi
+    done
+    return 1 # No conflict
+}
+
+function get_app_subdomain() {
+    local app_name=$1
+    local env_var_name="$(echo ${app_name} | tr '[:lower:]' '[:upper:]' | tr '-' '_')_SUBDOMAIN"
+    
+    # Check if already in .env
+    local existing=$(grep "^$env_var_name=" "$ENV_FILE" | cut -d'=' -f2)
+    if [[ -n "$existing" ]]; then
+        echo "$existing"
+        return
+    fi
+
+    # Prompt user
+    read -p "Enter subdomain for $app_name [default: $app_name]: " subdomain
+    subdomain=${subdomain:-$app_name}
+    
+    # Check for duplicates in current user's containers
+    if podman ps --filter "label=traefik.http.routers.${app_name}.rule" --format "{{.Labels}}" | grep -q "Host(\`$subdomain."; then
+        log "\e[33mWarning: Subdomain '$subdomain' seems already used by another container.\e[0m"
+        read -p "Continue anyway? (y/N): " cont
+        [[ "$cont" != "y" ]] && exit 1
+    fi
+
+    echo "$env_var_name=$subdomain" >> "$ENV_FILE"
+    echo "$subdomain"
+}
+
 function fetch_remote_recipe() {
     local pkg=$1 # e.g., core/traefik or recipes/immich
     local target_dir="$WORK_DIR/$PLATFORM/$pkg"
@@ -74,6 +110,13 @@ function do_setup() {
         [[ "$overwrite" != "y" ]] && exit 0
     fi
 
+    # Check for Traefik conflict early
+    if check_port_conflicts 80 443; then
+        log "\e[33mWarning: Ports 80 or 443 are already in use on this host.\e[0m"
+        log "This usually means a Traefik or another reverse proxy is already running."
+        log "You might not need to install 'core/traefik' for this user."
+    fi
+
     if [ ! -f "$WORK_DIR/.env.dist" ]; then
         curl -s -f "$GITHUB_RAW/.env.dist" -o "$WORK_DIR/.env.dist" || error "Could not fetch .env.dist"
     fi
@@ -94,22 +137,42 @@ function do_install() {
     local pkg=$1
     [[ -z "$pkg" ]] && error "Usage: sovereign install <package> (e.g., traefik, immich)"
 
-    if [[ "$pkg" != *"/"* ]]; then
-        pkg="recipes/$pkg"
+    local is_core=false
+    if [[ "$pkg" == "core/"* ]] || [[ "$pkg" == "traefik" ]] || [[ "$pkg" == "smtp" ]]; then
+        is_core=true
+        [[ "$pkg" == "traefik" ]] && pkg="core/traefik"
+        [[ "$pkg" == "smtp" ]] && pkg="core/smtp"
+    else
+        [[ "$pkg" != "recipes/"* ]] && pkg="recipes/$pkg"
     fi
 
-    # 1. Confirmation
+    # Special check for Traefik
+    if [[ "$pkg" == "core/traefik" ]]; then
+        if check_port_conflicts 80 443; then
+            log "\e[33mConflict: Ports 80/443 are already occupied.\e[0m"
+            read -p "Are you sure you want to attempt Traefik installation? (y/N): " confirm_traefik
+            [[ "$confirm_traefik" != "y" ]] && exit 0
+        fi
+    fi
+
+    # Confirmation
     read -p "Are you sure you want to install/update $pkg? (y/N): " confirm
     [[ "$confirm" != "y" ]] && exit 0
 
-    # 2. Fetch
+    # Fetch
     fetch_remote_recipe "$pkg"
     local target_dir="$WORK_DIR/$PLATFORM/$pkg"
 
-    # 3. Check for missing config
+    # For non-core recipes, handle custom subdomain
+    if [[ "$is_core" == "false" ]]; then
+        local app_name=$(basename "$pkg")
+        get_app_subdomain "$app_name" > /dev/null
+    fi
+
+    # Check for missing config
     check_required_config "$target_dir"
 
-    # 4. Install
+    # Install
     log "Deploying $pkg..."
     cd "$target_dir" && podman compose --env-file "$ENV_FILE" up -d
 }
