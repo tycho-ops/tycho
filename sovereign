@@ -3,9 +3,10 @@
 # sovereign - Autonomous Server Management CLI (GitHub backed)
 
 # Configuration
-REPO_USER="crapougnax"
-REPO_NAME="sovereign"
-REPO_BRANCH="master"
+# These can be overridden by environment variables (e.g., in ~/.sovereign/.env)
+REPO_USER="${REPO_USER:-crapougnax}"
+REPO_NAME="${REPO_NAME:-sovereign}"
+REPO_BRANCH="${REPO_BRANCH:-main}"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 GITHUB_API="https://api.github.com/repos/$REPO_USER/$REPO_NAME"
 
@@ -128,23 +129,34 @@ function do_stats() {
 }
 
 function do_upgrade() {
-    log "Upgrading Sovereign CLI from GitHub..."
+    log "Upgrading Sovereign CLI from GitHub ($REPO_USER/$REPO_NAME)..."
     local tmp_file=$(mktemp)
     
     if curl -s -f "$GITHUB_RAW/sovereign" -o "$tmp_file"; then
         local current_exe=$(readlink -f "$0")
-        chmod +x "$tmp_file"
+        chmod 755 "$tmp_file"
         
-        # Move the new version to the current executable location
-        if mv "$tmp_file" "$current_exe"; then
+        log "Moving new version to $current_exe..."
+        # Use 'cp' then 'rm' to handle cross-device move issues, and check for sudo
+        if cp "$tmp_file" "$current_exe" 2>/dev/null; then
+            rm -f "$tmp_file"
             log "Sovereign has been upgraded successfully!"
             exit 0
         else
-            error "Failed to replace the executable. Try running with sudo if installed in /usr/local/bin."
+            log "Permission denied. Attempting with sudo..."
+            if sudo cp "$tmp_file" "$current_exe"; then
+                sudo chmod 755 "$current_exe"
+                rm -f "$tmp_file"
+                log "Sovereign has been upgraded successfully (with sudo)!"
+                exit 0
+            else
+                rm -f "$tmp_file"
+                error "Failed to replace the executable even with sudo."
+            fi
         fi
     else
         rm -f "$tmp_file"
-        error "Failed to download the latest version from GitHub."
+        error "Failed to download the latest version from $GITHUB_RAW/sovereign"
     fi
 }
 
