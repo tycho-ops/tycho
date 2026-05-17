@@ -111,9 +111,9 @@ function do_list() {
 
     # Iterate through directories
     echo "$recipes_json" | jq -r '.[] | select(.type == "dir") | .name' | while read -r name; do
-        # Fetch the first line of README.md
+        # Fetch the description from package.json
         local description
-        description=$(curl -s -f "$GITHUB_RAW/$PLATFORM/recipes/$name/README.md" | head -n 1 | sed 's/^# //')
+        description=$(curl -s -f "$GITHUB_RAW/$PLATFORM/recipes/$name/package.json" | jq -r '.description // empty')
         if [[ -z "$description" ]]; then
             description="(No description available)"
         fi

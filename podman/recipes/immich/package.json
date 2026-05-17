@@ -1,0 +1,6 @@
+{
+  "name": "immich",
+  "version": "1.0.0",
+  "description": "High performance self-hosted photo and video management solution.",
+  "license": "AGPL-3.0"
+}
