@@ -14,12 +14,12 @@ if [[ $EUID -eq 0 ]]; then
     WORK_DIR="/etc/sovereign"
     ENV_FILE="/etc/sovereign/.env"
     export PODMAN_SOCK="/run/podman/podman.sock"
-    DEFAULT_STORAGE="/var/lib/sovereign/data"
+    DEFAULT_STORAGE="/data/system"
 else
     WORK_DIR="$HOME/.sovereign"
     ENV_FILE="$WORK_DIR/.env"
     export PODMAN_SOCK="/run/user/$UID/podman/podman.sock"
-    DEFAULT_STORAGE="$HOME/sovereign-data"
+    DEFAULT_STORAGE="/data/users/$USER"
 fi
 
 PODMAN_DIR="$WORK_DIR/podman"
@@ -154,8 +154,19 @@ function do_setup() {
     read -p "Enter your email for SSL (Let's Encrypt): " email
     sed -i "s|SSL_EMAIL=.*|SSL_EMAIL=$email|g" "$ENV_FILE"
 
-    read -p "Enter base storage path for all apps [default: $DEFAULT_STORAGE]: " base_storage
+    read -p "Enter base storage path for your apps [default: $DEFAULT_STORAGE]: " base_storage
     base_storage=${base_storage:-$DEFAULT_STORAGE}
+    
+    # Security/Isolation check: if user mode and path is outside home, ensure it has /user suffix
+    if [[ $EUID -ne 0 ]] && [[ "$base_storage" == /data* ]] && [[ "$base_storage" != */$USER ]]; then
+        log "\e[33mWarning: You chose a shared path ($base_storage) without your username suffix.\e[0m"
+        read -p "Append /$USER to ensure isolation? (Y/n): " append_user
+        if [[ "$append_user" != "n" ]]; then
+            base_storage="$base_storage/$USER"
+            log "Path updated to: $base_storage"
+        fi
+    fi
+
     mkdir -p "$base_storage"
     sed -i "s|BASE_STORAGE_PATH=.*|BASE_STORAGE_PATH=$base_storage|g" "$ENV_FILE"
 

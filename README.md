@@ -6,7 +6,8 @@ Sovereign is an autonomous server management CLI designed to deploy and manage a
 
 - **Standalone CLI**: One tool to rule them all.
 - **Dynamic Recipes**: Fetches the latest configurations directly from GitHub.
-- **Rootless First**: Designed for security and non-privileged users.
+- **Rootless First**: Optimized for rootless Podman environments with strict user isolation.
+- **Automated Storage**: Each user gets their own isolated storage space (e.g., `/data/users/username/app`).
 - **Smart Routing**: Automatic Traefik detection and subdomain conflict checks.
 
 ## Quick Install
