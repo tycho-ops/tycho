@@ -6,7 +6,7 @@ set -e
 
 REPO_USER="crapougnax" # To be updated by user
 REPO_NAME="sovereign"
-REPO_BRANCH="master"
+REPO_BRANCH="main"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 
 echo "--- Sovereign Installer ---"
