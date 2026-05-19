@@ -1,22 +1,22 @@
 #!/bin/bash
 
-# sovereign - Autonomous Server Management CLI (GitHub backed)
+# tycho - Autonomous Server Management CLI (GitHub backed)
 
 # Configuration
 REPO_USER="${REPO_USER:-crapougnax}"
-REPO_NAME="${REPO_NAME:-sovereign}"
+REPO_NAME="${REPO_NAME:-tycho}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 GITHUB_API="https://api.github.com/repos/$REPO_USER/$REPO_NAME"
 
 # Determine work directory and socket based on user (System vs User mode)
 if [[ $EUID -eq 0 ]]; then
-    WORK_DIR="/etc/sovereign"
-    ENV_FILE="/etc/sovereign/.env"
+    WORK_DIR="/etc/tycho"
+    ENV_FILE="/etc/tycho/.env"
     export PODMAN_SOCK="/run/podman/podman.sock"
     DEFAULT_STORAGE="/data/system"
 else
-    WORK_DIR="$HOME/.sovereign"
+    WORK_DIR="$HOME/.tycho"
     ENV_FILE="$WORK_DIR/.env"
     export PODMAN_SOCK="/run/user/$UID/podman/podman.sock"
     DEFAULT_STORAGE="/data/users/$USER"
@@ -29,12 +29,12 @@ mkdir -p "$PODMAN_DIR/core" "$PODMAN_DIR/recipes"
 
 # --- Utils ---
 
-function log() { echo -e "\e[32m[sovereign]\e[0m $1"; }
+function log() { echo -e "\e[32m[tycho]\e[0m $1"; }
 function error() { echo -e "\e[31m[error]\e[0m $1"; exit 1; }
 
 function check_env() {
     if [ ! -f "$ENV_FILE" ]; then
-        error "Configuration file (.env) not found. Please run 'sovereign setup' first."
+        error "Configuration file (.env) not found. Please run 'tycho setup' first."
     fi
 }
 
@@ -176,7 +176,7 @@ function do_setup() {
 function do_install() {
     check_env
     local pkg=$1
-    [[ -z "$pkg" ]] && error "Usage: sovereign install <package>"
+    [[ -z "$pkg" ]] && error "Usage: tycho install <package>"
 
     local is_core=false
     if [[ "$pkg" == "core/"* ]] || [[ "$pkg" == "traefik" ]] || [[ "$pkg" == "smtp" ]]; then
@@ -235,9 +235,9 @@ function do_install() {
 function do_create_systemd_service() {
     local target_dir=$1
     log "Creating systemd service for Traefik..."
-    cat <<EOF | sudo tee /etc/systemd/system/sovereign-traefik.service > /dev/null
+    cat <<EOF | sudo tee /etc/systemd/system/tycho-traefik.service > /dev/null
 [Unit]
-Description=Sovereign Traefik Service
+Description=Tycho Traefik Service
 After=network.target
 
 [Service]
@@ -251,14 +251,14 @@ Restart=always
 WantedBy=multi-user.target
 EOF
     sudo systemctl daemon-reload
-    sudo systemctl enable sovereign-traefik.service
-    log "Systemd service 'sovereign-traefik' enabled."
+    sudo systemctl enable tycho-traefik.service
+    log "Systemd service 'tycho-traefik' enabled."
 }
 
 function do_uninstall() {
     check_env
     local pkg=$1
-    [[ -z "$pkg" ]] && error "Usage: sovereign uninstall <package>"
+    [[ -z "$pkg" ]] && error "Usage: tycho uninstall <package>"
 
     if [[ "$pkg" != *"/"* ]]; then
         pkg="recipes/$pkg"
@@ -280,8 +280,8 @@ function do_uninstall() {
     cd "$target_dir" && podman compose --env-file "$ENV_FILE" down $down_args
     
     if [[ "$pkg" == "core/traefik" ]] && [[ $EUID -eq 0 ]]; then
-        sudo systemctl disable --now sovereign-traefik.service 2>/dev/null
-        sudo rm -f /etc/systemd/system/sovereign-traefik.service
+        sudo systemctl disable --now tycho-traefik.service 2>/dev/null
+        sudo rm -f /etc/systemd/system/tycho-traefik.service
         sudo systemctl daemon-reload
     fi
 
@@ -316,9 +316,9 @@ function do_stats() {
 }
 
 function do_upgrade() {
-    log "Upgrading Sovereign CLI..."
+    log "Upgrading Tycho CLI..."
     local tmp_file=$(mktemp)
-    if curl -s -f "$GITHUB_RAW/sovereign" -o "$tmp_file"; then
+    if curl -s -f "$GITHUB_RAW/tycho" -o "$tmp_file"; then
         chmod 755 "$tmp_file"
         if sudo cp "$tmp_file" $(readlink -f "$0"); then
             rm -f "$tmp_file"
@@ -330,7 +330,7 @@ function do_upgrade() {
 }
 
 function usage() {
-    echo "Sovereign CLI - $([[ $EUID -eq 0 ]] && echo 'SYSTEM MODE' || echo 'USER MODE')"
+    echo "Tycho CLI - $([[ $EUID -eq 0 ]] && echo 'SYSTEM MODE' || echo 'USER MODE')"
     echo ""
     echo "Commands:"
     echo "  setup            Initial configuration"

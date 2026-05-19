@@ -1,4 +1,4 @@
-# sovereign/core/smtp/compose.yaml
+# tycho/core/smtp/compose.yaml
 services:
   smtp:
     image: docker.io/mwader/postfix-relay:latest

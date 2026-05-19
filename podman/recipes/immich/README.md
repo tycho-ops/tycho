@@ -8,4 +8,4 @@ High performance self-hosted photo and video management solution.
 
 ## License
 - Original project license: **AGPL-3.0**
-- Recipe license: **AGPL-3.0** (part of Sovereign)
+- Recipe license: **AGPL-3.0** (part of Tycho)

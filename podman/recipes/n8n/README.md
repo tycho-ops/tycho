@@ -8,4 +8,4 @@ Workflow automation tool.
 
 ## License
 - Original project license: **FairCode (n8n license)**
-- Recipe license: **AGPL-3.0** (part of Sovereign)
+- Recipe license: **AGPL-3.0** (part of Tycho)

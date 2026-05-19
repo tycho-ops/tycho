@@ -1,27 +1,27 @@
 #!/bin/bash
 
-# Sovereign - Quick Installer
+# Tycho - Quick Installer
 
 set -e
 
 REPO_USER="crapougnax" # To be updated by user
-REPO_NAME="sovereign"
+REPO_NAME="tycho"
 REPO_BRANCH="main"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 
-echo "--- Sovereign Installer ---"
+echo "--- Tycho Installer ---"
 
 # 1. Download CLI
-echo "Downloading Sovereign CLI..."
-sudo curl -fsSL "$GITHUB_RAW/sovereign" -o /usr/local/bin/sovereign
-sudo chmod +x /usr/local/bin/sovereign
+echo "Downloading Tycho CLI..."
+sudo curl -fsSL "$GITHUB_RAW/tycho" -o /usr/local/bin/tycho
+sudo chmod +x /usr/local/bin/tycho
 
 # 2. Initialize work dir
-echo "Initializing ~/.sovereign directory..."
-mkdir -p "$HOME/.sovereign/podman/core" "$HOME/.sovereign/podman/recipes"
+echo "Initializing ~/.tycho directory..."
+mkdir -p "$HOME/.tycho/podman/core" "$HOME/.tycho/podman/recipes"
 
 # 3. Success
 echo ""
-echo "Sovereign CLI has been installed successfully!"
-echo "Run 'sovereign setup' to begin."
+echo "Tycho CLI has been installed successfully!"
+echo "Run 'tycho setup' to begin."
 echo ""

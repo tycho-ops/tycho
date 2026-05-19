@@ -1,4 +1,4 @@
-# sovereign/core/traefik/compose.yaml
+# tycho/core/traefik/compose.yaml
 services:
   traefik:
     image: traefik:latest

@@ -8,4 +8,4 @@ Self-hosted productivity platform.
 
 ## License
 - Original project license: **AGPL-3.0**
-- Recipe license: **AGPL-3.0** (part of Sovereign)
+- Recipe license: **AGPL-3.0** (part of Tycho)

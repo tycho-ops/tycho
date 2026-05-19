@@ -1,6 +1,6 @@
-# Sovereign Music Cookbook: The Nextcloud-Jellyfin Bridge
+# Tycho Music Cookbook: The Nextcloud-Jellyfin Bridge
 
-This cookbook explains how to create a seamless, high-performance music streaming setup by bridging **Nextcloud** (for synchronization) and **Jellyfin** (for streaming) using Sovereign's storage principles.
+This cookbook explains how to create a seamless, high-performance music streaming setup by bridging **Nextcloud** (for synchronization) and **Jellyfin** (for streaming) using Tycho's storage principles.
 
 ## The Principle
 
@@ -19,7 +19,7 @@ Instead of having isolated "silos" for each app, we use a **Shared Data Bridge**
 Ensure your music is synchronized in a dedicated folder in Nextcloud (e.g., `Music/`).
 
 ### 2. Configure the Jellyfin Recipe
-In your Jellyfin `compose.yaml`, add a bind mount pointing to your Nextcloud data directory. Use the Sovereign environment variables to keep it portable:
+In your Jellyfin `compose.yaml`, add a bind mount pointing to your Nextcloud data directory. Use the Tycho environment variables to keep it portable:
 
 ```yaml
 services:
@@ -35,7 +35,7 @@ services:
 *Note: Using `:ro` (read-only) ensures Jellyfin cannot accidentally modify or delete your sync files.*
 
 ### 3. Permissions Management
-In a rootless Podman environment, Sovereign ensures both apps run under the same user space. This makes the UID/GID mapping consistent, allowing Jellyfin to read Nextcloud's files without complex permission hacking.
+In a rootless Podman environment, Tycho ensures both apps run under the same user space. This makes the UID/GID mapping consistent, allowing Jellyfin to read Nextcloud's files without complex permission hacking.
 
 ### 4. Setup Jellyfin Library
 1. Open your Jellyfin Dashboard.
@@ -47,7 +47,7 @@ In a rootless Podman environment, Sovereign ensures both apps run under the same
 
 - **Zero Duplication**: One file, two uses. Save disk space.
 - **Bi-directional Sync**: Any song added via Nextcloud (mobile app, desktop client) appears in Jellyfin after the next scan.
-- **Sovereign Security**: Files remain in your isolated storage space, protected by the Sovereign multi-user directory structure.
+- **Tycho Security**: Files remain in your isolated storage space, protected by the Tycho multi-user directory structure.
 
 ---
-*Created as part of the Sovereign Project Principles.*
+*Created as part of the Tycho Project Principles.*
