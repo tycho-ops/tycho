@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quatrain Server Hub</title>
+  
+  <!-- Modern Premium Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(56, 189, 248, 0.3);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent: #38bdf8;
+      --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+      --glow-color: rgba(56, 189, 248, 0.15);
+      --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient background glows */
+    body::before, body::after {
+      content: '';
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, transparent 70%);
+      z-index: -1;
+      filter: blur(40px);
+    }
+    body::before { top: -10%; left: -10%; }
+    body::after { bottom: -10%; right: -10%; }
+
+    /* --- Lock Screen Overlay (Glassmorphism) --- */
+    #lock-screen {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 15, 25, 0.7);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease-out, visibility 0.5s;
+    }
+
+    #lock-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .login-card {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 3rem 2.5rem;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transform: translateY(0);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .login-card h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .login-card p {
+      color: var(--text-secondary);
+      margin: 0 0 2rem 0;
+      font-size: 1rem;
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 1rem 1.25rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      color: white;
+      font-size: 1.1rem;
+      outline: none;
+      transition: var(--transition);
+      text-align: center;
+    }
+
+    .input-group input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 14px;
+      background: var(--accent-gradient);
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 8px 20px rgba(56, 189, 248, 0.3);
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 25px rgba(56, 189, 248, 0.4);
+    }
+
+    .login-btn:active {
+      transform: translateY(0);
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+      height: 20px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .error-msg.visible {
+      opacity: 1;
+    }
+
+    /* Keyframe shake animation for incorrect password */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-10px); }
+      40%, 80% { transform: translateX(10px); }
+    }
+
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    /* --- Dashboard Container --- */
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      padding: 3rem 2rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s ease-out, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .container.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin: 0;
+      background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.03em;
+    }
+
+    p.subtitle {
+      color: var(--text-secondary);
+      margin: 0.75rem 0 0 0;
+      font-size: 1.25rem;
+      font-weight: 400;
+    }
+
+    /* --- Dynamic Grid --- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    /* --- Premium App Cards --- */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 2.25rem 2rem;
+      text-decoration: none;
+      color: inherit;
+      transition: var(--transition);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      opacity: 0;
+      transform: translateY(30px);
+    }
+
+    .container.visible .card {
+      animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideUpFade {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Hover card premium effects */
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: var(--card-hover-border);
+      background: rgba(30, 41, 59, 0.85);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-color);
+    }
+
+    .icon {
+      font-size: 2.25rem;
+      margin-bottom: 1.5rem;
+      background: rgba(56, 189, 248, 0.08);
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      color: var(--accent);
+      transition: var(--transition);
+    }
+
+    .card:hover .icon {
+      transform: scale(1.1);
+      background: rgba(56, 189, 248, 0.15);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+
+    .card h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    /* --- Status indicator dot --- */
+    .status-dot {
+      position: absolute;
+      top: 1.75rem;
+      right: 1.75rem;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #64748b;
+      box-shadow: 0 0 8px #64748b;
+      transition: all 0.5s ease;
+    }
+
+    .status-dot.online {
+      background-color: #10b981;
+      box-shadow: 0 0 12px #10b981, 0 0 24px rgba(16, 185, 129, 0.5);
+      animation: pulseGreen 2s infinite;
+    }
+
+    .status-dot.offline {
+      background-color: #ef4444;
+      box-shadow: 0 0 12px #ef4444;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 2rem 1rem;
+      }
+      h1 { font-size: 2.25rem; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Lock Screen Modal -->
+  <div id="lock-screen">
+    <div class="login-card" id="login-box">
+      <h2>Authentification</h2>
+      <p>Veuillez saisir votre mot de passe pour accéder au serveur.</p>
+      
+      <div class="input-group">
+        <input type="password" id="password-input" placeholder="Mot de passe" autocomplete="current-password">
+      </div>
+      
+      <button class="login-btn" id="submit-btn">Déverrouiller</button>
+      <div class="error-msg" id="error-message">Mot de passe incorrect.</div>
+    </div>
+  </div>
+
+  <!-- Dashboard Container -->
+  <div class="container" id="dashboard-container">
+    <header>
+      <h1 id="hub-title">Quatrain Server</h1>
+      <p class="subtitle" id="hub-subtitle">Infrastructure & Services Hub</p>
+    </header>
+
+    <div class="grid" id="services-grid">
+      <!-- Cards rendered dynamically by JS -->
+    </div>
+  </div>
+
+  <script>
+    let expectedHash = "";
+    
+    // Hash SHA-256 helper using subtle crypto
+    async function sha256(str) {
+      const buf = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest("SHA-256", buf);
+      return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    // Check authorization session
+    function isAuthorized() {
+      return sessionStorage.getItem("quatrain_hub_authorized") === "true";
+    }
+
+    // Load active services dynamically and render them
+    async function loadServices() {
+      try {
+        const res = await fetch("api/services");
+        if (!res.ok) throw new Error("Could not fetch active services");
+        const services = await res.json();
+
+        const grid = document.getElementById("services-grid");
+        grid.innerHTML = ""; // Clear existing
+
+        if (services.length === 0) {
+          grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 3rem;">
+              <h2>Aucun service actif détecté</h2>
+              <p>Installez vos premières recettes avec le CLI Tycho pour les voir apparaître ici.</p>
+            </div>
+          `;
+          return;
+        }
+
+        services.forEach(service => {
+          const cardHtml = `
+            <a href="${service.url}" target="_blank" class="card">
+              <div class="status-dot"></div>
+              <div class="icon">${service.icon || '🔗'}</div>
+              <h2>${service.name}</h2>
+              <p>${service.description}</p>
+            </a>
+          `;
+          grid.innerHTML += cardHtml;
+        });
+
+        // Setup live ping indicators
+        const cards = document.querySelectorAll(".card");
+        cards.forEach((card, idx) => {
+          const url = services[idx].url;
+          const dot = card.querySelector(".status-dot");
+          
+          // Initial ping
+          pingService(url, dot);
+          
+          // Periodic ping every 15 seconds to keep dashboard alive
+          setInterval(() => pingService(url, dot), 15000);
+        });
+
+        // Trigger dynamic card animation delays cascadingly
+        cards.forEach((card, idx) => {
+          card.style.animationDelay = `${idx * 0.08}s`;
+        });
+
+      } catch (err) {
+        console.error("Failed to load services:", err);
+      }
+    }
+
+    // Trigger dynamic card animation delays
+    async function showDashboard() {
+      document.getElementById("lock-screen").classList.add("hidden");
+      const container = document.getElementById("dashboard-container");
+      container.classList.add("visible");
+      
+      // Load and render active services dynamically AFTER authentication
+      await loadServices();
+    }
+
+    // Handle authentication submissions
+    async function handleAuth() {
+      const inputField = document.getElementById("password-input");
+      const loginBox = document.getElementById("login-box");
+      const errMsg = document.getElementById("error-message");
+      const password = inputField.value;
+
+      const hash = await sha256(password);
+      
+      if (hash === expectedHash) {
+        sessionStorage.setItem("quatrain_hub_authorized", "true");
+        await showDashboard();
+      } else {
+        // Trigger shake and show error
+        loginBox.classList.add("shake");
+        errMsg.classList.add("visible");
+        inputField.value = "";
+        
+        // Remove shake class after animation completes
+        setTimeout(() => {
+          loginBox.classList.remove("shake");
+        }, 400);
+      }
+    }
+
+    // Live status indicators (CORS-friendly silent fetch ping)
+    async function pingService(url, dotElement) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s Timeout
+
+      try {
+        await fetch(url, {
+          mode: 'no-cors',
+          signal: controller.signal
+        });
+        
+        // Success or CORS error still means the server is up and listening!
+        clearTimeout(timeoutId);
+        dotElement.className = "status-dot online";
+      } catch (err) {
+        clearTimeout(timeoutId);
+        dotElement.className = "status-dot offline";
+      }
+    }
+
+    // Initialize Page & Load Config
+    async function init() {
+      try {
+        const res = await fetch("api/config");
+        if (!res.ok) throw new Error("Could not load server config");
+        const config = await res.json();
+
+        // Bind title metadata dynamically
+        document.getElementById("hub-title").textContent = config.title || "Quatrain Server";
+        document.getElementById("hub-subtitle").textContent = config.subtitle || "Infrastructure & Services Hub";
+        
+        expectedHash = config.passwordHash;
+
+        // Verification of previous session
+        if (isAuthorized()) {
+          await showDashboard();
+        }
+
+      } catch (e) {
+        console.error("Dashboard init failed:", e);
+        document.getElementById("services-grid").innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; color: #f87171; padding: 2rem;">
+            <h2>Erreur de chargement de l'API</h2>
+            <p>Le serveur de découverte n'a pas pu être contacté. Assurez-vous que le conteneur fonctionne correctement.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Event listeners
+    document.getElementById("submit-btn").addEventListener("click", handleAuth);
+    document.getElementById("password-input").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") handleAuth();
+    });
+
+    // Run bootstrap
+    init();
+  </script>
+</body>
+</html>

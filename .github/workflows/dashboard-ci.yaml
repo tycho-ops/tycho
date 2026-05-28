@@ -1,0 +1,40 @@
+name: Dashboard Recipe - Build Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.tycho/recipes/podman/dashboard/**'
+      - '.github/workflows/dashboard-ci.yaml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.tycho/recipes/podman/dashboard/**'
+      - '.github/workflows/dashboard-ci.yaml'
+
+jobs:
+  build-image:
+    name: OCI Image Build Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Dashboard Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.tycho/recipes/podman/dashboard
+          file: ./.tycho/recipes/podman/dashboard/Dockerfile
+          push: false # Build validation only
+          tags: tycho-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

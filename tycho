@@ -22,6 +22,9 @@ else
     DEFAULT_STORAGE="/data/users/$USER"
 fi
 
+export TYCHO_WORK_DIR="$WORK_DIR"
+export TYCHO_ENV_FILE="$ENV_FILE"
+
 PODMAN_DIR="$WORK_DIR/podman"
 PLATFORM="podman"
 

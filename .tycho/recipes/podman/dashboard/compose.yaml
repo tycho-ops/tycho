@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    build: .
+    image: tycho-dashboard:latest
+    container_name: tycho-dashboard
+    restart: always
+    volumes:
+      - ${TYCHO_ENV_FILE}:/app/.env:ro
+      - ${TYCHO_WORK_DIR}/podman/recipes:/app/recipes:ro
+    environment:
+      - PORT=80
+      - DASHBOARD_PASSWORD_HASH=${DASHBOARD_PASSWORD_HASH:-2093077759d57a2472d6ff3156670a4a69bc92ff5e13d526e031a0e02c612be7}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard-app.rule=Host(`${DASHBOARD_SUBDOMAIN:-hub}.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.dashboard-app.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-app.tls=true"
+      - "traefik.http.routers.dashboard-app.tls.certresolver=${TRAEFIK_RESOLVER:-myresolver}"
+      - "traefik.http.services.dashboard-app.loadbalancer.server.port=80"
