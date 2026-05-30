@@ -76,14 +76,39 @@ install_podman() {
     esac
 }
 
+# Read input from the controlling terminal if available, with a fallback for non-interactive environments.
+# This prevents reading lines of the script itself when running the installer via piping (e.g., curl | bash).
+# Arguments:
+#   1: Prompt message to display
+#   2: Variable name to store the result
+#   3: Default value if no input is provided
+safe_read() {
+    local prompt="$1"
+    local var_name="$2"
+    local default_val="$3"
+    local response=""
+
+    if [ -t 0 ]; then
+        read -rp "$prompt" response
+    elif [ -c /dev/tty ]; then
+        # Group and redirect stderr to suppress shell redirection errors if /dev/tty is not openable
+        { read -rp "$prompt" response </dev/tty; } 2>/dev/null || response=""
+    else
+        # Fallback for non-interactive execution (e.g., CI/CD)
+        response=""
+    fi
+
+    # Assign value with default fallback using printf -v to prevent shell injection or quoting issues
+    printf -v "$var_name" "%s" "${response:-$default_val}"
+}
+
 # -------------------------------------------------------------
 # 1. Choose installation type for Tycho CLI
 # -------------------------------------------------------------
 echo -e "${BOLD}1. Select installation scope for Tycho CLI:${NC}"
 echo "   1) System-wide (installs to /usr/local/bin, requires sudo/root)"
 echo "   2) User-only (installs to $HOME/.local/bin, no root required)"
-read -rp "Choice [1-2, default: 2]: " cli_choice
-cli_choice=${cli_choice:-2}
+safe_read "Choice [1-2, default: 2]: " cli_choice 2
 
 if [[ "$cli_choice" -eq 1 ]]; then
     CLI_INSTALL_DIR="/usr/local/bin"
@@ -113,8 +138,7 @@ if [[ "$INSTALL_PODMAN_REQUIRED" == "true" ]]; then
     echo "   Would you like the installer to attempt to install Podman?"
     echo "   1) Yes, install system-wide (requires sudo/root)"
     echo "   2) No, skip Podman installation"
-    read -rp "Choice [1-2, default: 2]: " podman_choice
-    podman_choice=${podman_choice:-2}
+    safe_read "Choice [1-2, default: 2]: " podman_choice 2
 
     if [[ "$podman_choice" -eq 1 ]]; then
         PM=$(detect_package_manager)
@@ -138,8 +162,7 @@ if [[ "$OS_TYPE" == "Linux" ]]; then
     echo "   - Enable user session lingering (keeps containers running after logout)."
     echo "   - Allow unprivileged port binding below 1024 (for ports 80/443)."
     echo ""
-    read -rp "Optimize rootless Podman for the current user ($USER)? (Y/n): " optimize_choice
-    optimize_choice=${optimize_choice:-y}
+    safe_read "Optimize rootless Podman for the current user ($USER)? (Y/n): " optimize_choice y
 
     if [[ "$optimize_choice" =~ ^[Yy]$ ]]; then
         echo -e "${BLUE}Configuring user session lingering...${NC}"
