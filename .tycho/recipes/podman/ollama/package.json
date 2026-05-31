@@ -1,0 +1,7 @@
+{
+  "name": "ollama",
+  "version": "1.0.0",
+  "description": "Run large language models locally.",
+  "requiredEnv": ["OLLAMA_SUBDOMAIN"],
+  "license": "MIT"
+}
