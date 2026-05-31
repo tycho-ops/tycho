@@ -12,8 +12,15 @@ REPO_NAME="tycho"
 TYCHO_VERSION="${TYCHO_VERSION:-latest}"
 
 if [[ "$TYCHO_VERSION" == "latest" ]]; then
-    # Point to the asset inside the latest GitHub Release
-    DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/tycho"
+    # Resolve the latest release tag (including pre-releases) dynamically from GitHub API
+    RESOLVED_TAG=""
+    RESOLVED_TAG=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases" | jq -r '.[0].tag_name' 2>/dev/null)
+    if [[ $? -eq 0 ]] && [[ -n "$RESOLVED_TAG" ]] && [[ "$RESOLVED_TAG" != "null" ]]; then
+        DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/download/$RESOLVED_TAG/tycho"
+    else
+        # Point to the asset inside the latest GitHub Release as a safe fallback
+        DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/tycho"
+    fi
 elif [[ "$TYCHO_VERSION" =~ ^v[0-9] ]]; then
     # Point to a specific tagged GitHub Release asset
     DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/download/$TYCHO_VERSION/tycho"
@@ -258,7 +265,20 @@ echo -e "${BOLD}4. Installing Tycho CLI...${NC}"
 mkdir -p "$CLI_INSTALL_DIR"
 
 tmp_file=$(mktemp)
+download_success=false
+
 if curl -fsSL "$DOWNLOAD_URL" -o "$tmp_file"; then
+    download_success=true
+elif [[ "$TYCHO_VERSION" == "latest" ]]; then
+    echo -e "${YELLOW}Warning: Failed to download release asset from $DOWNLOAD_URL.${NC}" >&2
+    echo -e "Falling back to downloading directly from the main branch..." >&2
+    DOWNLOAD_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/main/tycho"
+    if curl -fsSL "$DOWNLOAD_URL" -o "$tmp_file"; then
+        download_success=true
+    fi
+fi
+
+if [[ "$download_success" == "true" ]]; then
     chmod +x "$tmp_file"
     if [[ "$USE_SUDO" == "true" ]]; then
         echo -e "Installing to $CLI_INSTALL_DIR/tycho (requires sudo)..."
@@ -286,7 +306,11 @@ fi
 
 # Save active version number
 if [[ "$TYCHO_VERSION" == "latest" ]]; then
-    RESOLVED_VERSION=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest" | jq -r '.tag_name' 2>/dev/null || echo "latest")
+    RESOLVED_VERSION=""
+    RESOLVED_VERSION=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases" | jq -r '.[0].tag_name' 2>/dev/null)
+    if [[ $? -ne 0 ]] || [[ -z "$RESOLVED_VERSION" ]] || [[ "$RESOLVED_VERSION" == "null" ]]; then
+        RESOLVED_VERSION="latest"
+    fi
 else
     RESOLVED_VERSION="$TYCHO_VERSION"
 fi
