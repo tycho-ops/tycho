@@ -1447,8 +1447,8 @@ function do_upgrade() {
     local tmp_file=$(mktemp)
     if curl -s -f "$download_url" -o "$tmp_file"; then
         chmod 755 "$tmp_file"
-        if sudo cp "$tmp_file" $(readlink -f "$0"); then
-            rm -f "$tmp_file"
+        local dest_path=$(readlink -f "$0")
+        if sudo mv "$tmp_file" "$dest_path"; then
             
             # Save the new version
             if [[ $EUID -eq 0 ]]; then
