@@ -2,8 +2,8 @@ name: Create Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -15,15 +15,45 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Version Change
+        id: detect_version
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "Current version in package.json: $CURRENT_VERSION"
+          
+          # Fetch tags from origin to see if the tag already exists
+          git fetch --tags
+          if git rev-parse "refs/tags/v$CURRENT_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$CURRENT_VERSION already exists. Skipping release."
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "New version detected: v$CURRENT_VERSION"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and Push Tag
+        if: steps.detect_version.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.detect_version.outputs.version }}" -m "Release v${{ steps.detect_version.outputs.version }}"
+          git push origin "v${{ steps.detect_version.outputs.version }}"
 
       - name: Create GitHub Release
+        if: steps.detect_version.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v${{ steps.detect_version.outputs.version }}"
           files: |
             tycho
             install.sh
             *.md
             LICENSE
           draft: false
-          prerelease: ${{ startsWith(github.ref_name, 'v0.') || contains(github.ref_name, '-') }}
+          prerelease: ${{ startsWith(steps.detect_version.outputs.version, '0.') || contains(steps.detect_version.outputs.version, '-') }}
           generate_release_notes: true
+

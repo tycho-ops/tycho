@@ -132,9 +132,37 @@ safe_read() {
     printf -v "$var_name" "%s" "${response:-$default_val}"
 }
 
+
+
+# -------------------------------------------------------------
+# 1. Choose installation type for Tycho CLI
+# -------------------------------------------------------------
+echo -e "${BOLD}1. Select installation scope for Tycho CLI:${NC}"
+echo "   1) System-wide (installs to /usr/local/bin, requires sudo/root)"
+echo "   2) User-only (installs to $HOME/.local/bin, no root required)"
+safe_read "Choice [1-2, default: 2]: " cli_choice 2
+
+if [[ "$cli_choice" -eq 1 ]]; then
+    CLI_INSTALL_DIR="/usr/local/bin"
+    USE_SUDO=true
+    echo -e "${GREEN}Scope selected: System-wide${NC}"
+else
+    CLI_INSTALL_DIR="$HOME/.local/bin"
+    USE_SUDO=false
+    echo -e "${GREEN}Scope selected: User-only${NC}"
+fi
+echo ""
+
 # -------------------------------------------------------------
 # Resolve download URL and target version
 # -------------------------------------------------------------
+pref_dir=""
+if [[ "$cli_choice" -eq 1 ]]; then
+    pref_dir="/etc/tycho"
+else
+    pref_dir="$HOME/.tycho"
+fi
+
 if [[ "$TYCHO_VERSION" == "latest" ]]; then
     # Resolve the latest release tag (including pre-releases) dynamically from GitHub API
     RESOLVED_TAG=""
@@ -145,18 +173,62 @@ if [[ "$TYCHO_VERSION" == "latest" ]]; then
             # Query the latest stable version
             STABLE_TAG=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest" | jq -r '.tag_name' 2>/dev/null || echo "")
             
-            # If a stable tag exists and is different, ask the user
+            # If a stable tag exists and is different, check for saved preference
             if [[ -n "$STABLE_TAG" ]] && [[ "$STABLE_TAG" != "$RESOLVED_TAG" ]]; then
-                echo -e "${YELLOW}${BOLD}NOTICE: The latest version is a pre-release: $RESOLVED_TAG${NC}" >&2
-                echo -e "The latest stable production release is: $STABLE_TAG" >&2
-                echo "" >&2
-                echo "Would you like to install the pre-release or fall back to the stable version?" >&2
-                echo "  1) Proceed with pre-release ($RESOLVED_TAG)" >&2
-                echo "  2) Fall back to latest stable version ($STABLE_TAG) [default]" >&2
-                echo "  3) Cancel installation" >&2
+                saved_pref=""
+                if [[ -f "$pref_dir/release_preference" ]]; then
+                    saved_pref=$(cat "$pref_dir/release_preference" | xargs)
+                fi
                 
                 choice="2"
-                safe_read "Choice [1-3, default: 2]: " choice "2"
+                if [[ "$saved_pref" == "unstable" ]]; then
+                    choice="1"
+                    echo -e "${GREEN}Using saved preference: Proceed with pre-release ($RESOLVED_TAG)${NC}" >&2
+                    echo -e "To reset or change this option, simply delete or edit the file: ${BOLD}$pref_dir/release_preference${NC}\n" >&2
+                elif [[ "$saved_pref" == "stable" ]]; then
+                    choice="2"
+                    echo -e "${GREEN}Using saved preference: Fall back to stable version ($STABLE_TAG)${NC}" >&2
+                    echo -e "To reset or change this option, simply delete or edit the file: ${BOLD}$pref_dir/release_preference${NC}\n" >&2
+                else
+                    echo -e "${YELLOW}${BOLD}NOTICE: The latest version is a pre-release: $RESOLVED_TAG${NC}" >&2
+                    echo -e "The latest stable production release is: $STABLE_TAG" >&2
+                    echo "" >&2
+                    echo "Would you like to install the pre-release or fall back to the stable version?" >&2
+                    echo "  1) Proceed with pre-release ($RESOLVED_TAG)" >&2
+                    echo "  2) Fall back to latest stable version ($STABLE_TAG) [default]" >&2
+                    echo "  3) Cancel installation" >&2
+                    
+                    safe_read "Choice [1-3, default: 2]: " choice "2"
+                    
+                    if [[ "$choice" == "1" ]] || [[ "$choice" == "2" ]]; then
+                        remember=""
+                        echo "" >&2
+                        safe_read "Remember this choice for future upgrades? (y/N): " remember "n"
+                        if [[ "$remember" == "y" || "$remember" == "Y" ]]; then
+                            # Ensure the config folder exists
+                            if [[ "$cli_choice" -eq 1 ]]; then
+                                sudo mkdir -p "$pref_dir"
+                                if [[ "$choice" == "1" ]]; then
+                                    echo "unstable" | sudo tee "$pref_dir/release_preference" >/dev/null
+                                    echo -e "${GREEN}Preference saved: 'unstable'.${NC}" >&2
+                                else
+                                    echo "stable" | sudo tee "$pref_dir/release_preference" >/dev/null
+                                    echo -e "${GREEN}Preference saved: 'stable'.${NC}" >&2
+                                fi
+                            else
+                                mkdir -p "$pref_dir"
+                                if [[ "$choice" == "1" ]]; then
+                                    echo "unstable" > "$pref_dir/release_preference"
+                                    echo -e "${GREEN}Preference saved: 'unstable'.${NC}" >&2
+                                else
+                                    echo "stable" > "$pref_dir/release_preference"
+                                    echo -e "${GREEN}Preference saved: 'stable'.${NC}" >&2
+                                fi
+                            fi
+                            echo -e "To reset or change this choice, simply delete or edit the file: ${BOLD}$pref_dir/release_preference${NC}\n" >&2
+                        fi
+                    fi
+                fi
                 
                 case "$choice" in
                     1)
@@ -189,25 +261,6 @@ else
     # Fallback to downloading directly from a raw branch (e.g., 'main' or 'dev')
     DOWNLOAD_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$TYCHO_VERSION/tycho"
 fi
-
-# -------------------------------------------------------------
-# 1. Choose installation type for Tycho CLI
-# -------------------------------------------------------------
-echo -e "${BOLD}1. Select installation scope for Tycho CLI:${NC}"
-echo "   1) System-wide (installs to /usr/local/bin, requires sudo/root)"
-echo "   2) User-only (installs to $HOME/.local/bin, no root required)"
-safe_read "Choice [1-2, default: 2]: " cli_choice 2
-
-if [[ "$cli_choice" -eq 1 ]]; then
-    CLI_INSTALL_DIR="/usr/local/bin"
-    USE_SUDO=true
-    echo -e "${GREEN}Scope selected: System-wide${NC}"
-else
-    CLI_INSTALL_DIR="$HOME/.local/bin"
-    USE_SUDO=false
-    echo -e "${GREEN}Scope selected: User-only${NC}"
-fi
-echo ""
 
 # -------------------------------------------------------------
 # 2. Check / Install System Dependencies (Podman & jq)
