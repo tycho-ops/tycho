@@ -41,6 +41,19 @@ function check_env() {
     fi
 }
 
+function resolve_compose_bin() {
+    if command -v podman-compose &>/dev/null; then
+        command -v podman-compose
+    elif command -v docker-compose &>/dev/null; then
+        command -v docker-compose
+    else
+        # Fallback to absolute podman compose wrapper
+        local podman_path
+        podman_path=$(command -v podman 2>/dev/null || echo "/usr/bin/podman")
+        echo "$podman_path compose --"
+    fi
+}
+
 function run_podman_compose() {
     local dir="$1"
     shift
@@ -56,7 +69,9 @@ function run_podman_compose() {
             source "$ENV_FILE"
             set +a
         fi
-        podman compose -- "$@"
+        local compose_bin
+        compose_bin=$(resolve_compose_bin)
+        $compose_bin "$@"
     )
     return $?
 }
@@ -405,6 +420,10 @@ function do_install() {
 function do_create_systemd_service() {
     local target_dir=$1
     ln -sf "$ENV_FILE" "$target_dir/.env" 2>/dev/null || true
+    
+    local compose_bin
+    compose_bin=$(resolve_compose_bin)
+    
     log "Creating systemd service for Traefik..."
     cat <<EOF | sudo tee /etc/systemd/system/tycho-traefik.service > /dev/null
 [Unit]
@@ -414,8 +433,8 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$target_dir
-ExecStart=/usr/bin/podman compose up
-ExecStop=/usr/bin/podman compose down
+ExecStart=$compose_bin up
+ExecStop=$compose_bin down
 Restart=always
 
 [Install]
