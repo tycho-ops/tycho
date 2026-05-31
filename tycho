@@ -46,7 +46,7 @@ function resolve_compose_bin() {
         command -v podman-compose
     elif command -v docker-compose &>/dev/null; then
         command -v docker-compose
-    elif command -v podman &>/dev/null && podman compose --help &>/dev/null; then
+    elif command -v podman &>/dev/null && podman --help 2>/dev/null | grep -q "compose"; then
         # Fallback to absolute podman compose wrapper only if natively supported
         local podman_path
         podman_path=$(command -v podman)
