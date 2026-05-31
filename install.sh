@@ -113,8 +113,42 @@ install_compose_engine() {
     case "$pm" in
         apt)
             sudo apt-get update
-            # Debian/Ubuntu: docker-compose is robustly available and fully compatible with podman
-            sudo apt-get install -y docker-compose
+            # Debian/Ubuntu: Try standard apt package first
+            if ! sudo apt-get install -y docker-compose; then
+                echo -e "${YELLOW}Warning: apt install failed due to broken dependencies (common on custom Ubuntu/ARM Jetson distributions).${NC}"
+                echo -e "${BLUE}Attempting to install standalone Docker Compose static binary...${NC}"
+                
+                local arch
+                arch=$(uname -m)
+                local os
+                os=$(uname -s | tr '[:upper:]' '[:lower:]')
+                
+                local compose_arch="$arch"
+                if [[ "$arch" == "armv7l" || "$arch" == "armv8l" ]]; then
+                    compose_arch="armv7"
+                fi
+                
+                local dl_url="https://github.com/docker/compose/releases/latest/download/docker-compose-${os}-${compose_arch}"
+                echo -e "${BLUE}Downloading standalone binary from: $dl_url${NC}"
+                
+                # Determine target install binary path
+                local target_bin="/usr/local/bin/docker-compose"
+                if [[ "$USE_SUDO" == "false" ]]; then
+                    target_bin="$HOME/.local/bin/docker-compose"
+                fi
+                
+                local sudo_cmd=""
+                if [[ "$USE_SUDO" == "true" ]]; then
+                    sudo_cmd="sudo"
+                fi
+                
+                if $sudo_cmd curl -SL "$dl_url" -o "$target_bin"; then
+                    $sudo_cmd chmod +x "$target_bin"
+                    echo -e "${GREEN}Successfully installed standalone Docker Compose static binary to $target_bin.${NC}"
+                else
+                    echo -e "${RED}Failed to download standalone Docker Compose binary. Please install docker-compose manually.${NC}"
+                fi
+            fi
             ;;
         dnf)
             sudo dnf install -y podman-compose
