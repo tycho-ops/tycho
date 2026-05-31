@@ -41,6 +41,27 @@ function check_env() {
     fi
 }
 
+function run_podman_compose() {
+    local dir="$1"
+    shift
+    
+    if [[ -d "$dir" ]]; then
+        ln -sf "$ENV_FILE" "$dir/.env" 2>/dev/null || true
+    fi
+    
+    (
+        cd "$dir" || exit 1
+        if [[ -f "$ENV_FILE" ]]; then
+            set -a
+            source "$ENV_FILE"
+            set +a
+        fi
+        podman compose "$@"
+    )
+    return $?
+}
+
+
 function check_port_conflicts() {
     local ports=("$@")
     for port in "${ports[@]}"; do
@@ -367,7 +388,7 @@ function do_install() {
     fi
 
     log "Deploying $pkg..."
-    cd "$target_dir" && podman compose --env-file "$ENV_FILE" up -d
+    run_podman_compose "$target_dir" up -d
 
     # Run recipe-specific post-install hook if it exists
     if [[ -f "$target_dir/post-install.sh" ]]; then
@@ -383,6 +404,7 @@ function do_install() {
 
 function do_create_systemd_service() {
     local target_dir=$1
+    ln -sf "$ENV_FILE" "$target_dir/.env" 2>/dev/null || true
     log "Creating systemd service for Traefik..."
     cat <<EOF | sudo tee /etc/systemd/system/tycho-traefik.service > /dev/null
 [Unit]
@@ -392,8 +414,8 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$target_dir
-ExecStart=/usr/bin/podman compose --env-file $ENV_FILE up
-ExecStop=/usr/bin/podman compose --env-file $ENV_FILE down
+ExecStart=/usr/bin/podman compose up
+ExecStop=/usr/bin/podman compose down
 Restart=always
 
 [Install]
@@ -422,7 +444,7 @@ function do_uninstall() {
     read -p "Remove persistent volumes? (y/N): " rm_volumes
     [[ "$rm_volumes" == "y" ]] && down_args="$down_args --volumes"
     
-    cd "$target_dir" && podman compose --env-file "$ENV_FILE" down $down_args
+    run_podman_compose "$target_dir" down $down_args
     
     if [[ "$pkg" == "traefik" ]] || [[ "$pkg" == "core/traefik" ]] && [[ $EUID -eq 0 ]]; then
         sudo systemctl disable --now tycho-traefik.service 2>/dev/null
@@ -971,9 +993,9 @@ function do_backup() {
         
         while read -r compose_dir; do
             if [[ -d "$compose_dir" ]] && [[ -f "$compose_dir/compose.yaml" ]]; then
-                if cd "$compose_dir" && podman compose ps -q &>/dev/null; then
+                if run_podman_compose "$compose_dir" ps -q &>/dev/null; then
                     log "  Stopping $(basename "$compose_dir")...."
-                    podman compose --env-file "$ENV_FILE" stop
+                    run_podman_compose "$compose_dir" stop
                     active_services+=("$compose_dir")
                 fi
             fi
@@ -1105,7 +1127,7 @@ function do_backup() {
         log "Restarting stopped containers..."
         for compose_dir in "${active_services[@]}"; do
             log "  Starting $(basename "$compose_dir")...."
-            cd "$compose_dir" && podman compose --env-file "$ENV_FILE" start
+            run_podman_compose "$compose_dir" start
         done
     fi
 
@@ -1231,14 +1253,14 @@ function do_restore() {
         local target_dir=$(resolve_local_pkg_dir "$SERVICE")
         if [[ -d "$target_dir" ]] && [[ -f "$target_dir/compose.yaml" ]]; then
             log "Stopping service $SERVICE..."
-            cd "$target_dir" && podman compose --env-file "$ENV_FILE" down 2>/dev/null
+            run_podman_compose "$target_dir" down 2>/dev/null
         fi
     else
         log "Stopping all active services..."
         while read -r compose_dir; do
             if [[ -d "$compose_dir" ]] && [[ -f "$compose_dir/compose.yaml" ]]; then
                 log "  Stopping $(basename "$compose_dir")..."
-                cd "$compose_dir" && podman compose --env-file "$ENV_FILE" down 2>/dev/null
+                run_podman_compose "$compose_dir" down 2>/dev/null
             fi
         done < <(find "$WORK_DIR/$PLATFORM" -type d -mindepth 2 -maxdepth 3 2>/dev/null)
     fi
@@ -1353,12 +1375,12 @@ function do_restore() {
         
         for c_dir in "${core_dirs[@]}"; do
             log "  Starting core service $(basename "$c_dir")..."
-            cd "$c_dir" && podman compose --env-file "$ENV_FILE" up -d
+            run_podman_compose "$c_dir" up -d
         done
         
         for r_dir in "${recipe_dirs[@]}"; do
             log "  Starting recipe service $(basename "$r_dir")..."
-            cd "$r_dir" && podman compose --env-file "$ENV_FILE" up -d
+            run_podman_compose "$r_dir" up -d
         done
     fi
     
@@ -1600,7 +1622,7 @@ case $1 in
         if [[ ! -d "$target_dir" ]]; then
             error "Package $2 is not installed locally."
         fi
-        cd "$target_dir" && podman compose --env-file "$ENV_FILE" down
+        run_podman_compose "$target_dir" down
         ;;
     logs)
         check_env
@@ -1608,7 +1630,7 @@ case $1 in
         if [[ ! -d "$target_dir" ]]; then
             error "Package $2 is not installed locally."
         fi
-        cd "$target_dir" && podman compose --env-file "$ENV_FILE" logs -f
+        run_podman_compose "$target_dir" logs -f
         ;;
     *)           usage ;;
 esac
