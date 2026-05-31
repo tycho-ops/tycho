@@ -352,6 +352,13 @@ function do_install() {
 
     check_required_config "$target_dir"
 
+    # Run recipe-specific pre-install hook if it exists
+    if [[ -f "$target_dir/pre-install.sh" ]]; then
+        log "Running pre-install script for $app_name..."
+        chmod +x "$target_dir/pre-install.sh"
+        (cd "$target_dir" && bash "./pre-install.sh" "$ENV_FILE") || error "Pre-install script failed."
+    fi
+
     # Ensure Podman socket is active
     if [[ $EUID -eq 0 ]]; then
         systemctl enable --now podman.socket &>/dev/null
@@ -361,6 +368,13 @@ function do_install() {
 
     log "Deploying $pkg..."
     cd "$target_dir" && podman compose --env-file "$ENV_FILE" up -d
+
+    # Run recipe-specific post-install hook if it exists
+    if [[ -f "$target_dir/post-install.sh" ]]; then
+        log "Running post-install script for $app_name..."
+        chmod +x "$target_dir/post-install.sh"
+        (cd "$target_dir" && bash "./post-install.sh" "$ENV_FILE") || error "Post-install script failed."
+    fi
 
     if [[ "$pkg" == "core/traefik" ]] && [[ $EUID -eq 0 ]]; then
         do_create_systemd_service "$target_dir"

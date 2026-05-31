@@ -15,6 +15,13 @@ services:
       - OLLAMA_ORIGINS=*
     volumes:
       - ollama_data:/root/.ollama
+#gpu#    deploy:
+#gpu#      resources:
+#gpu#        reservations:
+#gpu#          devices:
+#gpu#            - driver: nvidia
+#gpu#              count: all
+#gpu#              capabilities: [gpu]
 
 volumes:
   ollama_data:
