@@ -128,6 +128,32 @@ Each recipe directory must include:
    ```
 3. **`README.md`**: Descriptive setup, customization options, and volume mount documentation for users.
 
+### Recipe Hooks (pre-install & post-install)
+To enable advanced configuration, environment checks, or post-deployment seeding, Tycho supports dynamic execution of shell hooks inside your recipe directory.
+
+If these optional scripts are provided, the Tycho CLI will run them automatically during deployment:
+
+#### 1. Pre-installation Hook (`pre-install.sh`)
+This script runs **before** standard volumes are initialized and `podman compose` is triggered.
+- **Execution directory**: The script runs inside the localized recipe folder (e.g. `~/.tycho/podman/recipes/my-app/`).
+- **Arguments**: Receives a single argument containing the absolute path to the active Tycho `.env` file (accessible via `$1`).
+- **Common use cases**:
+  - Auto-detecting host capabilities (like checking for an NVIDIA GPU using `nvidia-smi` or `/dev/nvidia0` and prompting the user to enable it in-place in `compose.yaml`).
+  - Generating secure custom passwords, encryption keys, or salt variables and appending them to the `.env` file.
+  - Initializing or mapping specific host directories.
+
+#### 2. Post-installation Hook (`post-install.sh`)
+This script runs **after** the Tycho CLI has fully successfully deployed and started the container services via `podman compose up -d`.
+- **Execution directory**: The script runs inside the localized recipe folder (e.g. `~/.tycho/podman/recipes/my-app/`).
+- **Arguments**: Receives a single argument containing the absolute path to the active Tycho `.env` file (accessible via `$1`).
+- **Common use cases**:
+  - Automatically pulling resources or seeding data inside the running containers (e.g., executing `podman exec -it <container> ollama pull <model>` to download an initial LLM model).
+  - Performing database migrations or executing initialization endpoints.
+  - Displaying friendly post-installation messages, access URLs, or customized credential tips to the user.
+
+> [!NOTE]
+> **Interactivity Safeguard**: Since the hooks run in the active terminal environment, you can use interactive prompts using standard shell input (like `read` or using custom `safe_read` scripts to ensure compatibility with redirected streams).
+
 ### Best Practices for Recipe Providers
 - **Semantic Version Tags**: Proactively tag your repository releases using semantic versioning (e.g., `v1.0.0`, `v1.1.2`, `v2.0.0`). This allows users to add your repository pinned to safe major or minor release versions (like `owner/repo@v1`), which Tycho resolves to the latest stable minor/patch update dynamically.
 
