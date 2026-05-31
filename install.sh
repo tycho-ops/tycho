@@ -106,6 +106,34 @@ install_jq() {
     esac
 }
 
+# Install Compose engine using system package manager
+install_compose_engine() {
+    local pm=$1
+    echo -e "${BLUE}Installing Compose engine via $pm...${NC}"
+    case "$pm" in
+        apt)
+            sudo apt-get update
+            # Debian/Ubuntu: docker-compose is robustly available and fully compatible with podman
+            sudo apt-get install -y docker-compose
+            ;;
+        dnf)
+            sudo dnf install -y podman-compose
+            ;;
+        pacman)
+            sudo pacman -S --noconfirm podman-compose
+            ;;
+        zypper)
+            sudo zypper install -y podman-compose
+            ;;
+        brew)
+            brew install podman-compose
+            ;;
+        *)
+            echo -e "${RED}Unknown package manager. Please install a compose engine manually (e.g., docker-compose or podman-compose).${NC}"
+            ;;
+    esac
+}
+
 # Read input from the controlling terminal if available, with a fallback for non-interactive environments.
 # This prevents reading lines of the script itself when running the installer via piping (e.g., curl | bash).
 # Arguments:
@@ -286,15 +314,33 @@ else
     INSTALL_JQ_REQUIRED=true
 fi
 
+# Check Compose engine
+if command -v podman-compose &>/dev/null; then
+    echo -e "${GREEN}podman-compose is already installed.${NC}"
+    INSTALL_COMPOSE_REQUIRED=false
+elif command -v docker-compose &>/dev/null; then
+    echo -e "${GREEN}docker-compose is already installed.${NC}"
+    INSTALL_COMPOSE_REQUIRED=false
+elif command -v podman &>/dev/null && podman --help 2>/dev/null | grep -q "compose"; then
+    echo -e "${GREEN}Podman native compose wrapper is available.${NC}"
+    INSTALL_COMPOSE_REQUIRED=false
+else
+    echo -e "${YELLOW}No compose engine (podman-compose or docker-compose) was found on your system.${NC}"
+    INSTALL_COMPOSE_REQUIRED=true
+fi
+
 echo ""
 
-if [[ "$INSTALL_PODMAN_REQUIRED" == "true" || "$INSTALL_JQ_REQUIRED" == "true" ]]; then
+if [[ "$INSTALL_PODMAN_REQUIRED" == "true" || "$INSTALL_JQ_REQUIRED" == "true" || "$INSTALL_COMPOSE_REQUIRED" == "true" ]]; then
     echo -e "Would you like the installer to attempt to install missing dependencies?"
     if [[ "$INSTALL_PODMAN_REQUIRED" == "true" ]]; then
         echo "   - Podman"
     fi
     if [[ "$INSTALL_JQ_REQUIRED" == "true" ]]; then
         echo "   - jq"
+    fi
+    if [[ "$INSTALL_COMPOSE_REQUIRED" == "true" ]]; then
+        echo "   - Compose engine (docker-compose or podman-compose)"
     fi
     echo "   1) Yes, install missing dependencies (requires sudo/root)"
     echo "   2) No, skip dependency installation"
@@ -313,8 +359,11 @@ if [[ "$INSTALL_PODMAN_REQUIRED" == "true" || "$INSTALL_JQ_REQUIRED" == "true" ]
         if [[ "$INSTALL_JQ_REQUIRED" == "true" ]]; then
             install_jq "$PM"
         fi
+        if [[ "$INSTALL_COMPOSE_REQUIRED" == "true" ]]; then
+            install_compose_engine "$PM"
+        fi
     else
-        echo -e "${YELLOW}Skipping dependency installation. Please make sure both Podman and jq are installed before running Tycho.${NC}"
+        echo -e "${YELLOW}Skipping dependency installation. Please make sure Podman, jq, and a compose engine are installed before running Tycho.${NC}"
     fi
     echo ""
 fi

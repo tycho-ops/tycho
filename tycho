@@ -1644,6 +1644,12 @@ fi
 # Print Tycho CLI header on each execution (to stderr to preserve pipe sanity)
 echo -e "\e[34mTycho CLI ($TYCHO_VERSION) - $([[ $EUID -eq 0 ]] && echo 'SYSTEM MODE' || echo 'USER MODE')\e[0m" >&2
 
+# Validate compose engine availability on each invocation and print a warning if missing
+if ! resolve_compose_bin &>/dev/null; then
+    echo -e "\e[33m[warning] No compose engine (podman-compose or docker-compose) was found in your PATH.\e[0m" >&2
+    echo -e "\e[33m          Please install docker-compose (Option A) or podman-compose (Option B) to manage applications.\e[0m" >&2
+fi
+
 case $1 in
     setup)       do_setup ;;
     list)        do_list ;;
