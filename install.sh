@@ -270,8 +270,8 @@ if curl -fsSL "$DOWNLOAD_URL" -o "$tmp_file"; then
     rm -f "$tmp_file"
 else
     rm -f "$tmp_file"
-    echo -e "${RED}Error: Failed to download Tycho CLI from $DOWNLOAD_URL.${NC}"
-    echo -e "${RED}The release might still be publishing on GitHub. Please try again in a few minutes.${NC}"
+    echo -e "${RED}Error: Failed to download Tycho CLI from $DOWNLOAD_URL.${NC}" >&2
+    echo -e "${RED}The release might still be publishing on GitHub. Please try again in a few minutes.${NC}" >&2
     exit 1
 fi
 
@@ -298,13 +298,11 @@ else
 fi
 
 # Check if installation directory is in PATH (if user-only)
-if [[ "$USE_SUDO" == "false" ]]; then
-    if [[ ":$PATH:" != *":$CLI_INSTALL_DIR:"* ]]; then
-        echo ""
-        echo -e "${YELLOW}${BOLD}WARNING: $CLI_INSTALL_DIR is not in your PATH!${NC}"
-        echo -e "To run tycho easily, add it to your profile (e.g., ~/.bashrc or ~/.zshrc):"
-        echo -e "  ${BOLD}export PATH=\"\$PATH:\$HOME/.local/bin\"${NC}"
-    fi
+if [[ "$USE_SUDO" == "false" ]] && [[ ":$PATH:" != *":$CLI_INSTALL_DIR:"* ]]; then
+    echo ""
+    echo -e "${YELLOW}${BOLD}WARNING: $CLI_INSTALL_DIR is not in your PATH!${NC}"
+    echo -e "To run tycho easily, add it to your profile (e.g., ~/.bashrc or ~/.zshrc):"
+    echo -e "  ${BOLD}export PATH=\"\$PATH:\$HOME/.local/bin\"${NC}"
 fi
 
 # -------------------------------------------------------------

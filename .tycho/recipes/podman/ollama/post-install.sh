@@ -21,6 +21,7 @@ safe_read() {
     fi
 
     printf -v "$var_name" "%s" "${response:-$default_val}"
+    return 0
 }
 
 # Find Ollama container name dynamically

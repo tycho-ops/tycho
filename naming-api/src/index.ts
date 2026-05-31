@@ -50,8 +50,8 @@ export const AliasRecordProperties: any = [
 ]
 
 export class AliasRecord extends PersistedBaseObject {
-   static PROPS_DEFINITION = AliasRecordProperties
-   static COLLECTION = 'alias_records'
+   static readonly PROPS_DEFINITION = AliasRecordProperties
+   static readonly COLLECTION = 'alias_records'
 
    static async factory(src: any = undefined): Promise<AliasRecord> {
       return super.factory(src, AliasRecord)
@@ -68,6 +68,17 @@ function hashEmail(email: string): string {
    return crypto.createHmac('sha256', API_SECRET_SALT).update(cleanEmail).digest('hex')
 }
 
+// Helper to verify private IPv4 subnets (RFC 1918, CGNAT, Link-Local)
+function isIpv4Private(parts: number[]): boolean {
+   const [p0, p1] = parts
+   if (p0 === 10) return true
+   if (p0 === 172 && p1 >= 16 && p1 <= 31) return true
+   if (p0 === 192 && p1 === 168) return true
+   if (p0 === 169 && p1 === 254) return true // Link-Local
+   if (p0 === 100 && p1 >= 64 && p1 <= 127) return true // CGNAT
+   return false
+}
+
 // IP Verification for Loopback & Private networks (RFC 1918)
 function isIpPrivateOrReserved(ip: string): boolean {
    // Loopback (127.0.0.1, ::1)
@@ -75,14 +86,7 @@ function isIpPrivateOrReserved(ip: string): boolean {
 
    // Private IPv4 (RFC 1918)
    const parts = ip.split('.').map(Number)
-   if (parts.length === 4) {
-      if (parts[0] === 10) return true
-      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
-      if (parts[0] === 192 && parts[1] === 168) return true
-      if (parts[0] === 169 && parts[1] === 254) return true // Link-Local
-      if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true // CGNAT
-   }
-   return false
+   return parts.length === 4 && isIpv4Private(parts)
 }
 
 // Subdomain name reserved keywords to prevent phishing/abuse
@@ -97,6 +101,84 @@ function isValidSubdomain(subdomain: string): boolean {
    const regex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
    if (!regex.test(subdomain)) return false
    return !RESERVED_SUBDOMAINS.has(subdomain)
+}
+
+// Helper to create or update an A record
+async function upsertRecordA(host: string, zoneId: string, apiKey: string, name: string, ip: string, existingRecord: any): Promise<boolean> {
+   if (existingRecord) {
+      Api.info(`Updating existing A record for ${name} to ${ip}...`)
+      const putRes = await fetch(`${host}/zones/${zoneId}/records/${existingRecord.id}`, {
+         method: 'PUT',
+         headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({ content: ip, ttl: 300 })
+      })
+      if (!putRes.ok) {
+         Api.error(`Failed to update A record: ${await putRes.text()}`)
+         return false
+      }
+   } else {
+      Api.info(`Creating new A record for ${name} to ${ip}...`)
+      const postRes = await fetch(`${host}/zones/${zoneId}/records`, {
+         method: 'POST',
+         headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+         },
+         body: JSON.stringify([{
+            name,
+            type: 'A',
+            content: ip,
+            ttl: 300
+         }])
+      })
+      if (!postRes.ok) {
+         Api.error(`Failed to create A record: ${await postRes.text()}`)
+         return false
+      }
+   }
+   return true
+}
+
+// Helper to create or update a CNAME wildcard record
+async function upsertRecordCNAME(host: string, zoneId: string, apiKey: string, name: string, target: string, existingWildcard: any): Promise<boolean> {
+   if (existingWildcard) {
+      Api.info(`Updating existing CNAME wildcard for ${name} to ${target}...`)
+      const putRes = await fetch(`${host}/zones/${zoneId}/records/${existingWildcard.id}`, {
+         method: 'PUT',
+         headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({ content: target, ttl: 300 })
+      })
+      if (!putRes.ok) {
+         Api.error(`Failed to update CNAME wildcard: ${await putRes.text()}`)
+         return false
+      }
+   } else {
+      Api.info(`Creating new CNAME wildcard for ${name} to ${target}...`)
+      const postRes = await fetch(`${host}/zones/${zoneId}/records`, {
+         method: 'POST',
+         headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+         },
+         body: JSON.stringify([{
+            name,
+            type: 'CNAME',
+            content: target,
+            ttl: 300
+         }])
+      })
+      if (!postRes.ok) {
+         Api.error(`Failed to create CNAME wildcard: ${await postRes.text()}`)
+         return false
+      }
+   }
+   return true
 }
 
 // --- IONOS DNS API Client Logic ---
@@ -134,7 +216,7 @@ async function updateIonosDNS(subdomain: string, ip: string): Promise<boolean> {
          Api.error(`Failed to fetch records for zone ${zoneId}`)
          return false
       }
-      const zoneDetail = await recordsRes.json()
+      const zoneDetail = (await recordsRes.json()) as any
       const records = zoneDetail.records || []
 
       const targetRecordName = `${subdomain}.${DOMAIN_SUFFIX}`
@@ -144,64 +226,12 @@ async function updateIonosDNS(subdomain: string, ip: string): Promise<boolean> {
       const existingWildcard = records.find((r: any) => r.name === targetWildcardName && r.type === 'CNAME')
 
       // 3. Create or Update A Record (toto.tycho.cc)
-      if (existingRecord) {
-         Api.info(`Updating existing A record for ${targetRecordName} to ${ip}...`)
-         const putRes = await fetch(`${host}/zones/${zoneId}/records/${existingRecord.id}`, {
-            method: 'PUT',
-            headers: {
-               'X-API-Key': apiKey,
-               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: ip, ttl: 300 })
-         })
-         if (!putRes.ok) Api.error(`Failed to update A record: ${await putRes.text()}`)
-      } else {
-         Api.info(`Creating new A record for ${targetRecordName} to ${ip}...`)
-         const postRes = await fetch(`${host}/zones/${zoneId}/records`, {
-            method: 'POST',
-            headers: {
-               'X-API-Key': apiKey,
-               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify([{
-               name: targetRecordName,
-               type: 'A',
-               content: ip,
-               ttl: 300
-            }])
-         })
-         if (!postRes.ok) Api.error(`Failed to create A record: ${await postRes.text()}`)
-      }
+      const aSuccess = await upsertRecordA(host, zoneId, apiKey, targetRecordName, ip, existingRecord)
+      if (!aSuccess) return false
 
       // 4. Create or Update CNAME Record (*.toto.tycho.cc)
-      if (existingWildcard) {
-         Api.info(`Updating existing CNAME wildcard for ${targetWildcardName} to ${targetRecordName}...`)
-         const putRes = await fetch(`${host}/zones/${zoneId}/records/${existingWildcard.id}`, {
-            method: 'PUT',
-            headers: {
-               'X-API-Key': apiKey,
-               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: targetRecordName, ttl: 300 })
-         })
-         if (!putRes.ok) Api.error(`Failed to update CNAME wildcard: ${await putRes.text()}`)
-      } else {
-         Api.info(`Creating new CNAME wildcard for ${targetWildcardName} to ${targetRecordName}...`)
-         const postRes = await fetch(`${host}/zones/${zoneId}/records`, {
-            method: 'POST',
-            headers: {
-               'X-API-Key': apiKey,
-               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify([{
-               name: targetWildcardName,
-               type: 'CNAME',
-               content: targetRecordName,
-               ttl: 300
-            }])
-         })
-         if (!postRes.ok) Api.error(`Failed to create CNAME wildcard: ${await postRes.text()}`)
-      }
+      const cnameSuccess = await upsertRecordCNAME(host, zoneId, apiKey, targetWildcardName, targetRecordName, existingWildcard)
+      if (!cnameSuccess) return false
 
       return true
    } catch (error) {
@@ -239,6 +269,56 @@ export async function startNamingApi() {
       const server = new ExpressAdapter(undefined, { apiPrefix: '' })
       Api.addServer(server, 'default')
 
+// Helper to update an existing alias
+async function handleUpdateAlias(res: any, record: AliasRecord, subdomain: string, ip: string): Promise<any> {
+   // Check if IP is actually changing (No-op detection)
+   if (record.val('currentIp') === ip) {
+      Api.info(`[No-Op] Subdomain ${subdomain} already points to ${ip}`)
+      return res.json({ message: 'Adresse IP déjà à jour.' })
+   }
+
+   // Update record
+   record.set('currentIp', ip)
+   await (record as any).save()
+
+   // Update DNS
+   const dnsSuccess = await updateIonosDNS(subdomain, ip)
+   if (!dnsSuccess) {
+      return res.status(502).json({ error: `Impossible de mettre à jour les enregistrements DNS.` })
+   }
+
+   Api.info(`Updated subdomain ${subdomain} to new IP ${ip}`)
+   return res.json({ message: 'Adresse IP mise à jour avec succès.' })
+}
+
+// Helper to create a new alias
+async function handleCreateAlias(res: any, subdomain: string, emailHash: string, ip: string): Promise<any> {
+   // Rate Limit checking: Count existing domains owned by this email
+   const userDomains = await AliasRecord.query()
+      .where('emailHash', emailHash)
+      .execute(returnAs.AS_INSTANCES)
+
+   if (userDomains.items.length >= 5) {
+      return res.status(429).json({ error: `Limite atteinte : Maximum 5 sous-domaines par compte utilisateur.` })
+   }
+
+   // Create new record
+   const record = await AliasRecord.factory()
+   record.set('subdomain', subdomain)
+   record.set('emailHash', emailHash)
+   record.set('currentIp', ip)
+   await (record as any).save()
+
+   // Update DNS
+   const dnsSuccess = await updateIonosDNS(subdomain, ip)
+   if (!dnsSuccess) {
+      return res.status(502).json({ error: `Impossible d'enregistrer les enregistrements DNS.` })
+   }
+
+   Api.info(`Registered new subdomain *.${subdomain}.${DOMAIN_SUFFIX} to IP ${ip}`)
+   return res.json({ message: 'Alias créé et configuré avec succès.' })
+}
+
       // 3. Register endpoints
       server.post('/v1/alias/register', async (req: any, res: any) => {
          try {
@@ -273,49 +353,9 @@ export async function startNamingApi() {
                   return res.status(403).json({ error: `Ce sous-domaine est déjà enregistré par un autre utilisateur.` })
                }
 
-               // Check if IP is actually changing (No-op detection)
-               if (record.val('currentIp') === ip) {
-                  Api.info(`[No-Op] Subdomain ${subdomain} already points to ${ip}`)
-                  return res.json({ message: 'Adresse IP déjà à jour.' })
-               }
-
-               // Update record
-               record.set('currentIp', ip)
-               await (record as any).save()
-
-               // Update DNS
-               const dnsSuccess = await updateIonosDNS(subdomain, ip)
-               if (!dnsSuccess) {
-                  return res.status(502).json({ error: `Impossible de mettre à jour les enregistrements DNS.` })
-               }
-
-               Api.info(`Updated subdomain ${subdomain} to new IP ${ip}`)
-               return res.json({ message: 'Adresse IP mise à jour avec succès.' })
+               return await handleUpdateAlias(res, record, subdomain, ip)
             } else {
-               // Rate Limit checking: Count existing domains owned by this email
-               const userDomains = await AliasRecord.query()
-                  .where('emailHash', emailHash)
-                  .execute(returnAs.AS_INSTANCES)
-
-               if (userDomains.items.length >= 5) {
-                  return res.status(429).json({ error: `Limite atteinte : Maximum 5 sous-domaines par compte utilisateur.` })
-               }
-
-               // Create new record
-               const record = await AliasRecord.factory()
-               record.set('subdomain', subdomain)
-               record.set('emailHash', emailHash)
-               record.set('currentIp', ip)
-               await (record as any).save()
-
-               // Update DNS
-               const dnsSuccess = await updateIonosDNS(subdomain, ip)
-               if (!dnsSuccess) {
-                  return res.status(502).json({ error: `Impossible d'enregistrer les enregistrements DNS.` })
-               }
-
-               Api.info(`Registered new subdomain *.${subdomain}.${DOMAIN_SUFFIX} to IP ${ip}`)
-               return res.json({ message: 'Alias créé et configuré avec succès.' })
+               return await handleCreateAlias(res, subdomain, emailHash, ip)
             }
          } catch (err) {
             Api.error(`Error registering alias: ${(err as Error).message}`)
@@ -324,7 +364,7 @@ export async function startNamingApi() {
       })
 
       // Healthcheck route
-      server.get('/health', (req: any, res: any) => {
+      server.get('/health', (_req: any, res: any) => {
          res.json({ status: 'ok', domainSuffix: DOMAIN_SUFFIX })
       })
 
@@ -340,6 +380,6 @@ export async function startNamingApi() {
 }
 
 // Auto-run if executed directly
-if (require.main === module || (typeof Bun !== 'undefined' && Bun.main === import.meta.path)) {
+if (require.main === module || (typeof (globalThis as any).Bun !== 'undefined' && (globalThis as any).Bun.main === __filename)) {
    startNamingApi()
 }
