@@ -257,14 +257,22 @@ fi
 echo -e "${BOLD}4. Installing Tycho CLI...${NC}"
 mkdir -p "$CLI_INSTALL_DIR"
 
-if [[ "$USE_SUDO" == "true" ]]; then
-    echo -e "Downloading to $CLI_INSTALL_DIR/tycho (requires sudo)..."
-    sudo curl -fsSL "$DOWNLOAD_URL" -o "$CLI_INSTALL_DIR/tycho"
-    sudo chmod +x "$CLI_INSTALL_DIR/tycho"
+tmp_file=$(mktemp)
+if curl -fsSL "$DOWNLOAD_URL" -o "$tmp_file"; then
+    chmod +x "$tmp_file"
+    if [[ "$USE_SUDO" == "true" ]]; then
+        echo -e "Installing to $CLI_INSTALL_DIR/tycho (requires sudo)..."
+        sudo cp "$tmp_file" "$CLI_INSTALL_DIR/tycho"
+    else
+        echo -e "Installing to $CLI_INSTALL_DIR/tycho..."
+        cp "$tmp_file" "$CLI_INSTALL_DIR/tycho"
+    fi
+    rm -f "$tmp_file"
 else
-    echo -e "Downloading to $CLI_INSTALL_DIR/tycho..."
-    curl -fsSL "$DOWNLOAD_URL" -o "$CLI_INSTALL_DIR/tycho"
-    chmod +x "$CLI_INSTALL_DIR/tycho"
+    rm -f "$tmp_file"
+    echo -e "${RED}Error: Failed to download Tycho CLI from $DOWNLOAD_URL.${NC}"
+    echo -e "${RED}The release might still be publishing on GitHub. Please try again in a few minutes.${NC}"
+    exit 1
 fi
 
 # Initialize workspace directories
