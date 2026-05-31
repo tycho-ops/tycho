@@ -46,11 +46,13 @@ function resolve_compose_bin() {
         command -v podman-compose
     elif command -v docker-compose &>/dev/null; then
         command -v docker-compose
-    else
-        # Fallback to absolute podman compose wrapper
+    elif command -v podman &>/dev/null && podman compose --help &>/dev/null; then
+        # Fallback to absolute podman compose wrapper only if natively supported
         local podman_path
-        podman_path=$(command -v podman 2>/dev/null || echo "/usr/bin/podman")
+        podman_path=$(command -v podman)
         echo "$podman_path compose --"
+    else
+        return 1
     fi
 }
 
@@ -62,6 +64,12 @@ function run_podman_compose() {
         ln -sf "$ENV_FILE" "$dir/.env" 2>/dev/null || true
     fi
     
+    local compose_bin
+    compose_bin=$(resolve_compose_bin)
+    if [[ $? -ne 0 ]] || [[ -z "$compose_bin" ]]; then
+        error "No compose engine (podman-compose or docker-compose) was found in the PATH of the current user ($(whoami)).\n\nTo resolve this, please install podman-compose:\n  - Via Pip (system-wide):   sudo pip3 install podman-compose\n  - Via Package Manager:    sudo apt update && sudo apt install -y podman-compose (or dnf/brew)\n\nIf you installed it locally (e.g. pip3 install --user), please ensure the binary is in the PATH of the root user."
+    fi
+    
     (
         cd "$dir" || exit 1
         if [[ -f "$ENV_FILE" ]]; then
@@ -69,8 +77,6 @@ function run_podman_compose() {
             source "$ENV_FILE"
             set +a
         fi
-        local compose_bin
-        compose_bin=$(resolve_compose_bin)
         $compose_bin "$@"
     )
     return $?
@@ -423,6 +429,9 @@ function do_create_systemd_service() {
     
     local compose_bin
     compose_bin=$(resolve_compose_bin)
+    if [[ $? -ne 0 ]] || [[ -z "$compose_bin" ]]; then
+        error "No compose engine (podman-compose or docker-compose) was found in the PATH."
+    fi
     
     log "Creating systemd service for Traefik..."
     cat <<EOF | sudo tee /etc/systemd/system/tycho-traefik.service > /dev/null
@@ -1560,6 +1569,16 @@ function do_upgrade() {
         download_url="https://github.com/$REPO_USER/$REPO_NAME/releases/download/$resolved_version/tycho"
     else
         download_url="$GITHUB_RAW/tycho"
+    fi
+
+    # If the target is main branch, fetch the latest commit hash for the version display
+    if [[ "$resolved_version" == "main" ]]; then
+        local commit_sha=""
+        commit_sha=$(curl -s -f "$GITHUB_API/commits/main" | jq -r '.sha' 2>/dev/null)
+        if [[ $? -eq 0 ]] && [[ -n "$commit_sha" ]] && [[ "$commit_sha" != "null" ]]; then
+            local short_sha=$(echo "$commit_sha" | cut -c1-7)
+            resolved_version="main@$short_sha"
+        fi
     fi
 
     local tmp_file=$(mktemp)

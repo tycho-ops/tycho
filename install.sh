@@ -382,6 +382,14 @@ if [[ "$TYCHO_VERSION" == "latest" ]]; then
     fi
 else
     RESOLVED_VERSION="$TYCHO_VERSION"
+    if [[ "$RESOLVED_VERSION" == "main" ]]; then
+        commit_sha=""
+        commit_sha=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/main" | jq -r '.sha' 2>/dev/null)
+        if [[ $? -eq 0 ]] && [[ -n "$commit_sha" ]] && [[ "$commit_sha" != "null" ]]; then
+            short_sha=$(echo "$commit_sha" | cut -c1-7)
+            RESOLVED_VERSION="main@$short_sha"
+        fi
+    fi
 fi
 
 if [[ "$download_success" == "true" ]]; then
