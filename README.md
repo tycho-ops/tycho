@@ -15,9 +15,13 @@ Before diving in, check out the [Tycho Philosophy](PHILOSOPHY.md) to understand 
 
 ## Quick Install
 
+Deploy the latest stable release:
 ```bash
 curl -fsSL https://tycho.cc/install.sh | bash
 ```
+
+> [!TIP]
+> **Developer Options**: You can specify custom branches or tag versions during installation using the `TYCHO_VERSION` environment variable (e.g., `TYCHO_VERSION=main` to install the latest development state, or `TYCHO_VERSION=v0.9.0` to target a specific release).
 
 ---
 

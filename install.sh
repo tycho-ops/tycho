@@ -8,8 +8,19 @@ set -e
 
 REPO_USER="crapougnax"
 REPO_NAME="tycho"
-REPO_BRANCH="main"
-GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
+# Allow specifying target version via environment variable, defaults to 'latest' release
+TYCHO_VERSION="${TYCHO_VERSION:-latest}"
+
+if [[ "$TYCHO_VERSION" == "latest" ]]; then
+    # Point to the asset inside the latest GitHub Release
+    DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/tycho"
+elif [[ "$TYCHO_VERSION" =~ ^v[0-9] ]]; then
+    # Point to a specific tagged GitHub Release asset
+    DOWNLOAD_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/download/$TYCHO_VERSION/tycho"
+else
+    # Fallback to downloading directly from a raw branch (e.g., 'main' or 'dev')
+    DOWNLOAD_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$TYCHO_VERSION/tycho"
+fi
 
 # Colors for premium UI
 GREEN="\e[32m"
@@ -248,11 +259,11 @@ mkdir -p "$CLI_INSTALL_DIR"
 
 if [[ "$USE_SUDO" == "true" ]]; then
     echo -e "Downloading to $CLI_INSTALL_DIR/tycho (requires sudo)..."
-    sudo curl -fsSL "$GITHUB_RAW/tycho" -o "$CLI_INSTALL_DIR/tycho"
+    sudo curl -fsSL "$DOWNLOAD_URL" -o "$CLI_INSTALL_DIR/tycho"
     sudo chmod +x "$CLI_INSTALL_DIR/tycho"
 else
     echo -e "Downloading to $CLI_INSTALL_DIR/tycho..."
-    curl -fsSL "$GITHUB_RAW/tycho" -o "$CLI_INSTALL_DIR/tycho"
+    curl -fsSL "$DOWNLOAD_URL" -o "$CLI_INSTALL_DIR/tycho"
     chmod +x "$CLI_INSTALL_DIR/tycho"
 fi
 
@@ -263,6 +274,19 @@ if [[ "$cli_choice" -eq 1 ]]; then
 else
     echo "Initializing user config directory..."
     mkdir -p "$HOME/.tycho/podman/core" "$HOME/.tycho/podman/recipes"
+fi
+
+# Save active version number
+if [[ "$TYCHO_VERSION" == "latest" ]]; then
+    RESOLVED_VERSION=$(curl -s -f "https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest" | jq -r '.tag_name' 2>/dev/null || echo "latest")
+else
+    RESOLVED_VERSION="$TYCHO_VERSION"
+fi
+
+if [[ "$cli_choice" -eq 1 ]]; then
+    echo "$RESOLVED_VERSION" | sudo tee /etc/tycho/version >/dev/null
+else
+    echo "$RESOLVED_VERSION" > "$HOME/.tycho/version"
 fi
 
 # Check if installation directory is in PATH (if user-only)

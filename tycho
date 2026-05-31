@@ -1417,12 +1417,32 @@ function do_alias() {
 
 function do_upgrade() {
     log "Upgrading Tycho CLI..."
+    
+    # Resolve the latest version tag from GitHub API
+    local resolved_version=$(curl -s -f "$GITHUB_API/releases/latest" | jq -r '.tag_name' 2>/dev/null || echo "latest")
+    
+    # Resolve the appropriate download URL
+    local download_url=""
+    if [[ "$resolved_version" =~ ^v[0-9] ]]; then
+        download_url="https://github.com/$REPO_USER/$REPO_NAME/releases/download/$resolved_version/tycho"
+    else
+        download_url="$GITHUB_RAW/tycho"
+    fi
+
     local tmp_file=$(mktemp)
-    if curl -s -f "$GITHUB_RAW/tycho" -o "$tmp_file"; then
+    if curl -s -f "$download_url" -o "$tmp_file"; then
         chmod 755 "$tmp_file"
         if sudo cp "$tmp_file" $(readlink -f "$0"); then
             rm -f "$tmp_file"
-            log "Upgraded successfully!"
+            
+            # Save the new version
+            if [[ $EUID -eq 0 ]]; then
+                echo "$resolved_version" | sudo tee /etc/tycho/version >/dev/null
+            else
+                echo "$resolved_version" > "$WORK_DIR/version"
+            fi
+            
+            log "Upgraded successfully to $resolved_version!"
             exit 0
         fi
     fi
@@ -1431,8 +1451,6 @@ function do_upgrade() {
 
 
 function usage() {
-    echo "Tycho CLI - $([[ $EUID -eq 0 ]] && echo 'SYSTEM MODE' || echo 'USER MODE')"
-    echo ""
     echo "Commands:"
     echo "  setup            Initial configuration"
     echo "  list             List available recipes"
@@ -1462,6 +1480,15 @@ function usage() {
     echo "                     update                Update the server IP for the active subdomain"
     echo ""
 }
+
+# Load active version
+TYCHO_VERSION="unknown"
+if [[ -f "$WORK_DIR/version" ]]; then
+    TYCHO_VERSION=$(cat "$WORK_DIR/version")
+fi
+
+# Print Tycho CLI header on each execution (to stderr to preserve pipe sanity)
+echo -e "\e[34mTycho CLI ($TYCHO_VERSION) - $([[ $EUID -eq 0 ]] && echo 'SYSTEM MODE' || echo 'USER MODE')\e[0m" >&2
 
 case $1 in
     setup)       do_setup ;;

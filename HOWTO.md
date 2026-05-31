@@ -237,7 +237,37 @@ tycho restore <backup_file.tar.gz> --non-interactive
 > [!CAUTION]
 > **Destructive Operation**: Restoring from a backup will overwrite current configurations and persistent data directories under `$WORK_DIR` and `$BASE_STORAGE_PATH` within the backup's scoped boundaries (e.g., overwriting ONLY the target service files if it was a service-level backup).
 
-## 5. Troubleshooting
+## 5. Core CLI Development & Releases (Developer Guide)
+
+If you are contributing to the core Tycho project, this guide explains how the installation, versioning, and release pipeline are structured.
+
+### Installation Versioning Options
+The quick installer supports the `TYCHO_VERSION` environment variable. This allows developers and administrators to deploy and test different states of the CLI:
+
+- **Stable Release (Default)**: Downloads the latest official compiled release binary and assets.
+  ```bash
+  curl -fsSL https://tycho.cc/install.sh | bash
+  ```
+- **Latest Development State (`main`)**: Downloads the latest commits directly from the `main` branch.
+  ```bash
+  TYCHO_VERSION=main curl -fsSL https://tycho.cc/install.sh | bash
+  ```
+- **Specific Tag/Version**: Downloads a specific release tag asset.
+  ```bash
+  TYCHO_VERSION=v0.9.0 curl -fsSL https://tycho.cc/install.sh | bash
+  ```
+
+### Release Automation
+We use a GitHub Actions workflow to publish releases automatically:
+1. **Trigger**: Pushing any tag starting with `v*` (e.g. `v0.9.0`) triggers the `.github/workflows/release.yaml` workflow.
+2. **Release Notes**: A GitHub Release is created, and release notes are automatically compiled by listing all commits and pull requests since the previous tag.
+3. **Packaged Assets**: The following assets are packaged and attached directly to the release page:
+   - `tycho` (The main CLI executable script)
+   - `install.sh` (The quick installation script)
+   - `LICENSE` (The licensing terms)
+   - All root markdown documentation (`*.md` files: `README.md`, `HOWTO.md`, `PHILOSOPHY.md`, `COOKBOOK_MUSIC.md`)
+
+## 6. Troubleshooting
 
 - **Logs**: `tycho logs <package>` (e.g., `tycho logs core/traefik`).
 - **Conflict detection**: Tycho will warn you if you try to use a subdomain that is already active on the same server.
