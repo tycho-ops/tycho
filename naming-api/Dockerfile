@@ -1,6 +1,12 @@
 # Final Stage
 FROM oven/bun:1.1-alpine
+
+# Set working directory and configure ownership
 WORKDIR /app
+RUN chown -R bun:bun /app
+
+# Switch to the unprivileged bun user
+USER bun
 
 # OCI standard labels
 LABEL org.opencontainers.image.title="Tycho Naming API"
@@ -11,14 +17,14 @@ LABEL org.opencontainers.image.vendor="Quatrain Technologies"
 LABEL org.opencontainers.image.authors="Quatrain Developers <developers@quatrain.com>"
 
 # Copy dependencies first for layer caching
-COPY package.json ./
+COPY --chown=bun:bun package.json ./
 
 # Install dependencies (ignoring workspace limits to run standalone)
 RUN bun install --production
 
 # Copy source code and config files
-COPY tsconfig.json ./
-COPY src/ ./src/
+COPY --chown=bun:bun tsconfig.json ./
+COPY --chown=bun:bun src/ ./src/
 
 # Expose server port
 EXPOSE 4000
