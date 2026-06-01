@@ -1,6 +1,12 @@
 # Final Stage
 FROM oven/bun:alpine
+
+# Set working directory and configure ownership
 WORKDIR /app
+RUN chown -R bun:bun /app
+
+# Switch to the unprivileged bun user
+USER bun
 
 # OCI standard labels
 LABEL org.opencontainers.image.title="Tycho Dynamic Dashboard"
@@ -11,11 +17,11 @@ LABEL org.opencontainers.image.vendor="Quatrain Technologies"
 LABEL org.opencontainers.image.authors="Quatrain Developers <developers@quatrain.com>"
 
 # Copy package descriptors and source code
-COPY package.json ./
+COPY --chown=bun:bun package.json ./
 RUN bun install --production
 
-COPY src/ ./src/
-COPY html/ ./html/
+COPY --chown=bun:bun src/ ./src/
+COPY --chown=bun:bun html/ ./html/
 
 # Expose HTTP port 80
 EXPOSE 80
