@@ -2,3 +2,4 @@ theme: jekyll-theme-hacker
 title: Tycho
 description: Autonomous Server Management CLI backed by Podman & Git — v0.9.10 (2026-06-13)
 show_downloads: true
+google_analytics: G-656WP14F2Y
