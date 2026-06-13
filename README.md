@@ -72,15 +72,15 @@ More robust. Traefik is a system-level gateway, and users install their apps sep
 
 Tycho comes with several pre-configured, production-ready application recipes:
 
-- **backup-receiver**: A dedicated system to securely receive and verify remote server backups.
-- **dashboard**: A central landing page with automated service discovery, cryptographic lock, and system resource indicators.
-- **immich**: High-performance self-hosted photo and video management backup solution.
-- **jellyfin**: Media server for streaming movies, shows, and music.
-- **mattermost**: Open-source, self-hosted developer collaboration platform (Slack alternative) backed by PostgreSQL.
-- **n8n**: Workflow automation tool to integrate systems and build automations.
-- **nextcloud**: Enterprise-grade private cloud platform for file sharing, calendar, and collaboration.
-- **ollama**: Local large language model (LLM) server with automatic GPU acceleration support.
-- **open-notebook**: Self-hosted AI-powered knowledge management tool (NotebookLM alternative) backed by SurrealDB.
+- **[backup-receiver](https://github.com/crapougnax/tycho)** (License: **AGPL-3.0**): A dedicated system to securely receive and verify remote server backups.
+- **[dashboard](https://github.com/crapougnax/tycho)** (License: **AGPL-3.0**): A central landing page with automated service discovery, cryptographic lock, and system resource indicators.
+- **[immich](https://github.com/immich-app/immich)** (License: **AGPL-3.0**): High-performance self-hosted photo and video management backup solution.
+- **[jellyfin](https://github.com/jellyfin/jellyfin)** (License: **GPL-2.0**): Media server for streaming movies, shows, and music.
+- **[mattermost](https://github.com/mattermost/mattermost)** (License: **MIT**): Open-source, self-hosted developer collaboration platform (Slack alternative) backed by PostgreSQL.
+- **[n8n](https://github.com/n8n-io/n8n)** (License: **FairCode**): Workflow automation tool to integrate systems and build automations.
+- **[nextcloud](https://github.com/nextcloud/server)** (License: **AGPL-3.0**): Enterprise-grade private cloud platform for file sharing, calendar, and collaboration.
+- **[ollama](https://github.com/ollama/ollama)** (License: **MIT**): Local large language model (LLM) server with automatic GPU acceleration support.
+- **[open-notebook](https://github.com/lfnovo/open-notebook)** (License: **Apache-2.0**): Self-hosted AI-powered knowledge management tool (NotebookLM alternative) backed by SurrealDB.
 
 ## License
 
