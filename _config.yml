@@ -1,4 +1,4 @@
-theme: jekyll-theme-midnight
+theme: jekyll-theme-hacker
 title: Tycho
 description: Autonomous Server Management CLI backed by Podman & Git
 show_downloads: true
