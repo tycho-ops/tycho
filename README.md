@@ -64,7 +64,23 @@ More robust. Traefik is a system-level gateway, and users install their apps sep
 - `tycho backup [file] [opts]`: Backup configurations (metadata) and persistent databases. Supports CRON, service scoping, remote SSH scp/rsync transport, and incremental syncing. See the [Backup Guide](HOWTO.md#backup--restore).
 - `tycho restore <file>`: Overwrite configurations and databases from a backup archive or folder. Scoped boundaries prevent accidental data loss. See the [Restore Guide](HOWTO.md#backup--restore).
 - `tycho stats`: Monitor your server's health.
+- `tycho ps`: List active containers managed by Tycho for the current user.
+- `tycho alias <cmd>`: Register or update dynamic wildcard subdomains (e.g. `*.subdomain.tycho.cc`) pointing to your server's public IP. See [Domain Alias Management](HOWTO.md#5-domain-alias-management-dynamic-dns).
 - `tycho upgrade`: Self-update the CLI to the latest version.
+
+## 📦 Included Recipes
+
+Tycho comes with several pre-configured, production-ready application recipes:
+
+- **backup-receiver**: A dedicated system to securely receive and verify remote server backups.
+- **dashboard**: A central landing page with automated service discovery, cryptographic lock, and system resource indicators.
+- **immich**: High-performance self-hosted photo and video management backup solution.
+- **jellyfin**: Media server for streaming movies, shows, and music.
+- **mattermost**: Open-source, self-hosted developer collaboration platform (Slack alternative) backed by PostgreSQL.
+- **n8n**: Workflow automation tool to integrate systems and build automations.
+- **nextcloud**: Enterprise-grade private cloud platform for file sharing, calendar, and collaboration.
+- **ollama**: Local large language model (LLM) server with automatic GPU acceleration support.
+- **open-notebook**: Self-hosted AI-powered knowledge management tool (NotebookLM alternative) backed by SurrealDB.
 
 ## License
 

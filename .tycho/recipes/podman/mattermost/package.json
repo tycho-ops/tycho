@@ -1,0 +1,7 @@
+{
+  "name": "mattermost",
+  "version": "1.0.0",
+  "description": "Open-source, self-hosted Slack-alternative for developer collaboration.",
+  "requiredEnv": ["MATTERMOST_DB_DATA_LOCATION", "MATTERMOST_DATA_LOCATION", "MATTERMOST_DB_PASSWORD"],
+  "license": "AGPL-3.0"
+}

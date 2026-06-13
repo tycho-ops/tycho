@@ -1,0 +1,7 @@
+{
+  "name": "open-notebook",
+  "version": "1.0.0",
+  "description": "Open-source, self-hosted AI-powered knowledge management system.",
+  "requiredEnv": ["OPEN_NOTEBOOK_DB_DATA_LOCATION", "OPEN_NOTEBOOK_DATA_LOCATION"],
+  "license": "Apache-2.0"
+}

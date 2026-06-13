@@ -64,6 +64,12 @@ Tycho supports third-party recipe repositories similar to Helm. This allows you 
   tycho repo remove <name>
   ```
 
+- **Bootstrap a new repository template**:
+  ```bash
+  tycho repo boilerplate <folder>
+  ```
+  Creates the standard Tycho recipe repository structure inside the specified directory, including the metadata file (`.tycho/repository.json`) and placeholder folders for your custom services.
+
 ### Listing & Installing Third-Party Recipes
 - **List recipes**: `tycho list` dynamically queries all registered repositories and presents a unified table:
   ```
@@ -154,10 +160,44 @@ This script runs **after** the Tycho CLI has fully successfully deployed and sta
 > [!NOTE]
 > **Interactivity Safeguard**: Since the hooks run in the active terminal environment, you can use interactive prompts using standard shell input (like `read` or using custom `safe_read` scripts to ensure compatibility with redirected streams).
 
+### Publishing & Sharing Your Custom Recipes
+To publish and share your custom recipes:
+1. **Bootstrap the repository structure**: Run `tycho repo boilerplate <folder>` to initialize the required directory structure and `repository.json` metadata file in your local directory.
+2. **Add your recipes**: Place your recipe directories under `.tycho/recipes/podman/<recipe_name>/` including the `compose.yaml`, `package.json`, and `README.md` files.
+3. **Commit and push**: Initialize git in the folder, commit all your files, and push them to a public GitHub repository (e.g. `https://github.com/username/my-tycho-recipes`).
+4. **Publish releases**: Tag your repository commits with semantic versions (e.g., `v1.0.0`, `v1.1.0`).
+5. **Share with users**: Users can then register your repository using:
+   ```bash
+   tycho repo add <alias_name> <username>/<my-tycho-recipes>[@version_tag]
+   ```
+   And deploy your custom recipe via:
+   ```bash
+   tycho install <alias_name>/<recipe_name>
+   ```
+
 ### Best Practices for Recipe Providers
 - **Semantic Version Tags**: Proactively tag your repository releases using semantic versioning (e.g., `v1.0.0`, `v1.1.2`, `v2.0.0`). This allows users to add your repository pinned to safe major or minor release versions (like `owner/repo@v1`), which Tycho resolves to the latest stable minor/patch update dynamically.
 
-## 4. Monitoring & Maintenance
+## 5. Domain Alias Management (Dynamic DNS)
+
+Tycho comes with support for wildcard dynamic subdomains via a free alias service integrated at `api.tycho.cc`. This is particularly useful for exposing containers via Traefik without setting up or purchasing your own custom domain.
+
+### Registering and Updating Aliases
+
+- **Register a new alias**:
+  ```bash
+  tycho alias register <subdomain>
+  ```
+  This registers `*.subdomain.tycho.cc` pointing to your server's current public IP address.
+  *Note: The email address configured in `tycho setup` is pseudonymized during registration using `HMAC-SHA256` with a secret server-side salt, protecting your privacy.*
+
+- **Update an existing alias**:
+  ```bash
+  tycho alias update
+  ```
+  Updates the public IP associated with your active subdomain. Perfect for servers with dynamic residential IP addresses (can be run via CRON).
+
+## 6. Monitoring & Maintenance
 
 - **System Stats**: `tycho stats` shows real-time resource usage.
 - **Process List**: `tycho ps` lists all active containers managed by Tycho for the current user.
@@ -237,7 +277,7 @@ tycho restore <backup_file.tar.gz> --non-interactive
 > [!CAUTION]
 > **Destructive Operation**: Restoring from a backup will overwrite current configurations and persistent data directories under `$WORK_DIR` and `$BASE_STORAGE_PATH` within the backup's scoped boundaries (e.g., overwriting ONLY the target service files if it was a service-level backup).
 
-## 5. Core CLI Development & Releases (Developer Guide)
+## 7. Core CLI Development & Releases (Developer Guide)
 
 If you are contributing to the core Tycho project, this guide explains how the installation, versioning, and release pipeline are structured.
 
@@ -269,7 +309,7 @@ We use a GitHub Actions workflow to publish releases automatically:
    - `LICENSE` (The licensing terms)
    - All root markdown documentation (`*.md` files: `README.md`, `HOWTO.md`, `PHILOSOPHY.md`, `COOKBOOK_MUSIC.md`)
 
-## 6. Troubleshooting
+## 8. Troubleshooting
 
 - **Logs**: `tycho logs <package>` (e.g., `tycho logs core/traefik`).
 - **Conflict detection**: Tycho will warn you if you try to use a subdomain that is already active on the same server.

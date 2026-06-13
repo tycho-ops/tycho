@@ -1,0 +1,41 @@
+services:
+  db:
+    image: docker.io/postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD}
+      POSTGRES_DB: mattermost
+    volumes:
+      - ${MATTERMOST_DB_DATA_LOCATION}:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser -d mattermost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mattermost:
+    image: docker.io/mattermost/mattermost-team-edition:latest
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8065:8065"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mattermost.rule=Host(`${MATTERMOST_SUBDOMAIN:-mattermost}.${DOMAIN_NAME}`)
+      - traefik.http.routers.mattermost.entrypoints=websecure
+      - traefik.http.routers.mattermost.tls=true
+      - traefik.http.routers.mattermost.tls.certresolver=${TRAEFIK_RESOLVER:-myresolver}
+      - traefik.http.services.mattermost.loadbalancer.server.port=8065
+    environment:
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:${MATTERMOST_DB_PASSWORD}@db:5432/mattermost?sslmode=disable
+      - MM_SERVICESETTINGS_SITEURL=https://${MATTERMOST_SUBDOMAIN:-mattermost}.${DOMAIN_NAME}
+    volumes:
+      - ${MATTERMOST_DATA_LOCATION}/config:/mattermost/config:Z
+      - ${MATTERMOST_DATA_LOCATION}/data:/mattermost/data:Z
+      - ${MATTERMOST_DATA_LOCATION}/logs:/mattermost/logs:Z
+      - ${MATTERMOST_DATA_LOCATION}/plugins:/mattermost/plugins:Z
+      - ${MATTERMOST_DATA_LOCATION}/client-plugins:/mattermost/client/plugins:Z

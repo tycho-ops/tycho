@@ -1,0 +1,37 @@
+services:
+  surrealdb:
+    image: docker.io/surrealdb/surrealdb:v2
+    command: start --log info --user root --pass root rocksdb:/mydata/mydatabase.db
+    user: root # Required for bind mounts on Linux
+    volumes:
+      - ${OPEN_NOTEBOOK_DB_DATA_LOCATION}:/mydata:Z
+    environment:
+      - SURREAL_EXPERIMENTAL_GRAPHQL=true
+    restart: always
+    pull_policy: always
+
+  open_notebook:
+    image: docker.io/lfnovo/open_notebook:v1-latest
+    ports:
+      - "127.0.0.1:8502:8502" # Web UI
+      - "127.0.0.1:5055:5055" # REST API
+    environment:
+      - OPEN_NOTEBOOK_ENCRYPTION_KEY=${OPEN_NOTEBOOK_ENCRYPTION_KEY}
+      - SURREAL_URL=ws://surrealdb:8000/rpc
+      - SURREAL_USER=root
+      - SURREAL_PASSWORD=root
+      - SURREAL_NAMESPACE=open_notebook
+      - SURREAL_DATABASE=open_notebook
+    volumes:
+      - ${OPEN_NOTEBOOK_DATA_LOCATION}:/app/data:Z
+    depends_on:
+      - surrealdb
+    restart: always
+    pull_policy: always
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.open-notebook.rule=Host(`${OPEN_NOTEBOOK_SUBDOMAIN:-open-notebook}.${DOMAIN_NAME}`)
+      - traefik.http.routers.open-notebook.entrypoints=websecure
+      - traefik.http.routers.open-notebook.tls=true
+      - traefik.http.routers.open-notebook.tls.certresolver=${TRAEFIK_RESOLVER:-myresolver}
+      - traefik.http.services.open-notebook.loadbalancer.server.port=8502
