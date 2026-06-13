@@ -10,3 +10,9 @@ header h1, header h2,
 #title, .logo, .project-name, .project-tagline {
   font-family: 'Bricolage Grotesque', sans-serif !important;
 }
+
+// Adjust line-height to spread text and improve readability
+body, p, li, blockquote, section {
+  line-height: 1.75 !important;
+}
+
