@@ -1,0 +1,7 @@
+{
+  "name": "devsecops-lab",
+  "version": "1.0.0",
+  "description": "DevSecOps Pentest Lab containing OWASP Juice Shop and Trivy scanner.",
+  "requiredEnv": [],
+  "license": "AGPL-3.0"
+}

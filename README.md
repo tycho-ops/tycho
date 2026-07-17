@@ -113,6 +113,8 @@ Tycho comes with several pre-configured, production-ready application recipes:
 
 - **[backup-receiver](https://github.com/crapougnax/tycho)** (License: **AGPL-3.0**): A dedicated system to securely receive and verify remote server backups.
 - **[dashboard](https://github.com/crapougnax/tycho)** (License: **AGPL-3.0**): A central landing page with automated service discovery, cryptographic lock, and system resource indicators.
+- **[devsecops-lab](CYBERSECURITY_LAB.md)** (License: **AGPL-3.0**): Cybersecurity pentest lab featuring OWASP Juice Shop and automated Trivy vulnerability scanning. (See [Cybersecurity Lab Guide](file:///Users/crapougnax/CODE/CRAPOUGNAX/tycho/CYBERSECURITY_LAB.md)).
+- **[gitea](https://github.com/go-gitea/gitea)** (License: **MIT**): Painless self-hosted Git service with a lightweight SQLite database backend.
 - **[immich](https://github.com/immich-app/immich)** (License: **AGPL-3.0**): High-performance self-hosted photo and video management backup solution.
 - **[jellyfin](https://github.com/jellyfin/jellyfin)** (License: **GPL-2.0**): Media server for streaming movies, shows, and music.
 - **[mattermost](https://github.com/mattermost/mattermost)** (License: **MIT**): Open-source, self-hosted developer collaboration platform (Slack alternative) backed by PostgreSQL.

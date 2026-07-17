@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  trivy-scanner:
+    image: docker.io/aquasec/trivy:latest
+    restart: "no"
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    command: image --exit-code 0 --format table --output /reports/trivy-report.txt bkimminich/juice-shop:latest
+    volumes:
+      - ./reports:/reports:Z
+
+  juiceshop:
+    image: docker.io/bkimminich/juice-shop:latest
+    restart: always
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      trivy-scanner:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data/juiceshop:/juice-shop/data:Z
