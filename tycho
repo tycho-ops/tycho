@@ -506,7 +506,7 @@ function fetch_and_list_recipes() {
         return
     fi
 
-    echo "$recipes_json" | jq -r '.[] | select(.type == "dir") | .name' | while read -r name; do
+    echo "$recipes_json" | jq -r '.[] | select(.type == "dir") | .name' 2>/dev/null | while read -r name; do
         local description
         description=$(curl -s -f "$raw_url/.tycho/recipes/$PLATFORM/$name/package.json" | jq -r '.description // empty' 2>/dev/null)
         printf "%-25s %-15s %s\n" "$name" "$r_name" "${description:-(No description)}"

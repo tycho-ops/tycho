@@ -1,0 +1,9 @@
+{
+  "name": "gitea",
+  "version": "1.0.0",
+  "description": "Git with a cup of tea - a painless self-hosted Git service.",
+  "requiredEnv": [
+    "GITEA_DATA_LOCATION"
+  ],
+  "license": "MIT"
+}

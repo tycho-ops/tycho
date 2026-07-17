@@ -1,0 +1,20 @@
+services:
+  gitea:
+    image: docker.io/gitea/gitea:1.22
+    restart: always
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea/gitea.db
+    ports:
+      - "${GITEA_SSH_PORT:-2222}:22"
+    volumes:
+      - ${GITEA_DATA_LOCATION}:/data:Z
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`${GITEA_SUBDOMAIN:-gitea}.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.gitea.entrypoints=websecure"
+      - "traefik.http.routers.gitea.tls=true"
+      - "traefik.http.routers.gitea.tls.certresolver=${TRAEFIK_RESOLVER:-myresolver}"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
