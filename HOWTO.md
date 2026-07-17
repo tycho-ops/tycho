@@ -1,6 +1,6 @@
 # Tycho HOWTO
 
-**Latest Release:** [v0.9.10](https://github.com/tycho-ops/tycho/releases/tag/v0.9.10) (June 13, 2026)
+**Latest Release:** [v0.9.11](https://github.com/tycho-ops/tycho/releases/tag/v0.9.11) (July 17, 2026)
 
 This guide provides detailed instructions on how to customize and extend your Tycho infrastructure depending on your needs.
 
