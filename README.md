@@ -1,8 +1,12 @@
-# Tycho
+# Tycho — Autonomous Rootless Host & Multi-Cloud Orchestrator
 
-**Latest Release:** [v0.9.11](https://github.com/tycho-ops/tycho/releases/tag/v0.9.11) (July 17, 2026)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Latest Release](https://img.shields.io/github/v/release/tycho-ops/tycho?color=brightgreen&label=Release)](https://github.com/tycho-ops/tycho/releases)
+[![Podman Rootless](https://img.shields.io/badge/Podman-Rootless_0--Sudo-purple.svg?logo=podman&logoColor=white)](https://podman.io)
+[![Multi-Arch](https://img.shields.io/badge/Arch-AMD64%20%7C%20ARM64-orange.svg)](#)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/tycho-ops/tycho/ci.yml?branch=main&label=CI)](https://github.com/tycho-ops/tycho/actions)
 
-Tycho is an autonomous server management CLI designed to deploy and manage a complete, self-hosted infrastructure using Podman. It supports two primary deployment patterns.
+**Tycho** is an autonomous server management CLI designed to deploy, orchestrate, and maintain a complete, self-hosted container infrastructure using rootless **Podman** and multi-cloud **Kubernetes**.
 
 Before diving in, check out the [Tycho Philosophy](PHILOSOPHY.md) to understand the project's core principles. For comprehensive setup guides and architectural instructions, see the [Tycho HOWTO](HOWTO.md).
 
