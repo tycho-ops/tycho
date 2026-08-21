@@ -1668,7 +1668,7 @@ case $1 in
     ps)          podman ps --filter "label=com.docker.compose.project" ;;
     down)
         check_env
-        local target_dir=$(resolve_local_pkg_dir "$2")
+        target_dir=$(resolve_local_pkg_dir "$2")
         if [[ ! -d "$target_dir" ]]; then
             error "Package $2 is not installed locally."
         fi
@@ -1676,7 +1676,7 @@ case $1 in
         ;;
     logs)
         check_env
-        local target_dir=$(resolve_local_pkg_dir "$2")
+        target_dir=$(resolve_local_pkg_dir "$2")
         if [[ ! -d "$target_dir" ]]; then
             error "Package $2 is not installed locally."
         fi
