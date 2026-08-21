@@ -29,6 +29,12 @@ All AI coding agents interacting with this workspace **MUST** strictly load and 
 - **Kubernetes Subcommands:** Kubernetes orchestration is routed via `tycho k8s <bootstrap|cert|deploy|status|tf>` delegating to `tycho-ops/k8s-iac`.
 - **Backward Compatibility:** Top-level legacy aliases (e.g. `tycho install`) must be preserved as transparent redirects.
 
+### D. Bash Quality Standards & SonarCloud Rules
+- **No Exit Code Masking:** Never declare a `local` variable in the same statement as a command substitution (`local out; out=$(cmd)`).
+- **Double Brackets Tests:** Always use `[[ ... ]]` instead of single brackets `[ ... ]`.
+- **Stderr Redirection:** Always redirect errors, warnings, and diagnostic CLI headers to stderr (`>&2`).
+- **Explicit Returns:** Provide an explicit `return 0` at the end of every shell function.
+
 ---
 
 ## 🛠️ 3. Essential Development Commands
