@@ -502,7 +502,7 @@ function fetch_and_list_recipes() {
     local recipes_json
     recipes_json=$(curl -s -f "$api_url/contents/.tycho/recipes/$PLATFORM?ref=$r_branch")
     if [[ $? -ne 0 ]]; then
-        log "\e[33mWarning: Failed to reach GitHub API for repository '$r_name' ($r_owner/$r_repo).\e[0m"
+        # Silently skip repos with no recipes (e.g. knowledge-only repos)
         return
     fi
 
@@ -1608,6 +1608,292 @@ function do_upgrade() {
 }
 
 
+# --- Knowledge Package Management ---
+
+KNOWLEDGE_DIR="$WORK_DIR/knowledge"
+KNOWLEDGE_REGISTRY="$KNOWLEDGE_DIR/registry.json"
+
+function ensure_knowledge_registry() {
+    mkdir -p "$KNOWLEDGE_DIR"
+    if [[ ! -f "$KNOWLEDGE_REGISTRY" ]]; then
+        echo "[]" > "$KNOWLEDGE_REGISTRY"
+    fi
+}
+
+function find_knowledge_repo() {
+    local pkg_name=$1
+
+    # Search in registered repositories for .tycho/knowledge/<pkg_name>/package.json
+    if [[ -f "$WORK_DIR/repositories.json" ]]; then
+        local repos=$(jq -c '.[]' "$WORK_DIR/repositories.json" 2>/dev/null)
+        if [[ -n "$repos" ]]; then
+            while read -r repo_json; do
+                local r_name=$(echo "$repo_json" | jq -r '.name')
+                local r_owner=$(echo "$repo_json" | jq -r '.owner')
+                local r_repo=$(echo "$repo_json" | jq -r '.repo')
+                local r_branch=$(echo "$repo_json" | jq -r '.branch')
+                if curl -s -f -I "https://raw.githubusercontent.com/$r_owner/$r_repo/$r_branch/.tycho/knowledge/$pkg_name/package.json" &>/dev/null; then
+                    echo "$r_name;$r_owner;$r_repo;$r_branch;$pkg_name"
+                    return 0
+                fi
+            done <<< "$repos"
+        fi
+    fi
+
+    return 1
+}
+
+function fetch_knowledge_package() {
+    local r_owner=$1
+    local r_repo=$2
+    local r_branch=$3
+    local pkg_name=$4
+    local target_dir="$KNOWLEDGE_DIR/$pkg_name"
+
+    log "Fetching knowledge package '$pkg_name' from $r_owner/$r_repo@$r_branch..."
+
+    # Download tarball from GitHub API
+    local tarball_url="https://api.github.com/repos/$r_owner/$r_repo/tarball/$r_branch"
+    local tmp_tar=$(mktemp /tmp/tycho-knowledge-XXXXXX.tar.gz)
+    local tmp_extract=$(mktemp -d /tmp/tycho-knowledge-extract-XXXXXX)
+
+    if ! curl -s -f -L "$tarball_url" -o "$tmp_tar"; then
+        rm -f "$tmp_tar"
+        rm -rf "$tmp_extract"
+        error "Failed to download tarball from $tarball_url"
+    fi
+
+    # Extract and locate the repo root (GitHub tarballs have a prefixed directory)
+    tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null
+    local extracted_root=$(find "$tmp_extract" -maxdepth 1 -type d | tail -1)
+
+    # Replace existing package directory
+    rm -rf "$target_dir"
+    mv "$extracted_root" "$target_dir"
+
+    # Clean up
+    rm -f "$tmp_tar"
+    rm -rf "$tmp_extract"
+
+    log "Package extracted to $target_dir"
+}
+
+function do_knowledge() {
+    local cmd=$1
+    ensure_knowledge_registry
+
+    case "$cmd" in
+        install)
+            local input=$2
+            [[ -z "$input" ]] && error "Usage: tycho knowledge install [repo/]<package>"
+
+            local pkg_name="$input"
+            local r_name="" r_owner="" r_repo="" r_branch=""
+
+            # If input contains a slash, treat as repo/package
+            if [[ "$input" == *"/"* ]]; then
+                r_name="${input%%/*}"
+                pkg_name="${input#*/}"
+            fi
+
+            # Find the knowledge package in registered repos
+            if [[ -n "$r_name" ]]; then
+                # Explicit repo target
+                local repo_json=$(jq -c ".[] | select(.name == \"$r_name\")" "$WORK_DIR/repositories.json" 2>/dev/null)
+                if [[ -z "$repo_json" ]]; then
+                    error "Repository '$r_name' not found. Run 'tycho repo list' to see registered repositories."
+                fi
+                r_owner=$(echo "$repo_json" | jq -r '.owner')
+                r_repo=$(echo "$repo_json" | jq -r '.repo')
+                r_branch=$(echo "$repo_json" | jq -r '.branch')
+            else
+                # Auto-search across all repos
+                local match_info=$(find_knowledge_repo "$pkg_name")
+                if [[ -z "$match_info" ]]; then
+                    error "Knowledge package '$pkg_name' not found in any registered repository."
+                fi
+                IFS=';' read -r r_name r_owner r_repo r_branch pkg_name <<< "$match_info"
+            fi
+
+            # Check if already installed
+            local existing=$(jq -r ".[] | select(.name == \"$pkg_name\") | .version" "$KNOWLEDGE_REGISTRY" 2>/dev/null)
+            if [[ -n "$existing" ]]; then
+                read -p "Knowledge package '$pkg_name' (v$existing) is already installed. Reinstall? (y/N): " confirm
+                [[ "$confirm" != "y" ]] && exit 0
+            fi
+
+            # Fetch the entire repo as a tarball
+            fetch_knowledge_package "$r_owner" "$r_repo" "$r_branch" "$pkg_name"
+
+            local target_dir="$KNOWLEDGE_DIR/$pkg_name"
+
+            # Read package metadata
+            local pkg_json="$target_dir/.tycho/knowledge/$pkg_name/package.json"
+            local pkg_version="unknown"
+            local pkg_desc=""
+            local pkg_targets=""
+            if [[ -f "$pkg_json" ]]; then
+                pkg_version=$(jq -r '.version // "unknown"' "$pkg_json")
+                pkg_desc=$(jq -r '.description // ""' "$pkg_json")
+                pkg_targets=$(jq -r '.targets // [] | join(", ")' "$pkg_json")
+            fi
+
+            # Run pre-install hook if present
+            local pre_hook="$target_dir/.tycho/knowledge/$pkg_name/pre-install.sh"
+            if [[ -x "$pre_hook" ]]; then
+                log "Running pre-install hook..."
+                bash "$pre_hook" "$ENV_FILE" || log "\e[33mWarning: pre-install hook exited with non-zero status\e[0m"
+            fi
+
+            # Run post-install hook if present
+            local post_hook="$target_dir/.tycho/knowledge/$pkg_name/post-install.sh"
+            if [[ -x "$post_hook" ]]; then
+                log "Running post-install hook..."
+                bash "$post_hook" "$ENV_FILE" || log "\e[33mWarning: post-install hook exited with non-zero status\e[0m"
+            fi
+
+            # Update registry
+            local tmp_file=$(mktemp)
+            jq "del(.[] | select(.name == \"$pkg_name\"))" "$KNOWLEDGE_REGISTRY" > "$tmp_file"
+            jq ". += [{\"name\": \"$pkg_name\", \"repo\": \"$r_name\", \"owner\": \"$r_owner/$r_repo\", \"branch\": \"$r_branch\", \"version\": \"$pkg_version\", \"targets\": \"$pkg_targets\", \"enabled\": true, \"installedAt\": \"$(date -Iseconds)\"}]" "$tmp_file" > "$KNOWLEDGE_REGISTRY"
+            rm -f "$tmp_file"
+
+            log "\e[32m✅ Knowledge package '$pkg_name' v$pkg_version installed successfully.\e[0m"
+            if [[ -n "$pkg_targets" ]]; then
+                log "   Targets: $pkg_targets"
+            fi
+            ;;
+
+        list)
+            echo ""
+            printf "\e[1m%-20s %-10s %-25s %-8s %s\e[0m\n" "PACKAGE" "VERSION" "TARGETS" "STATUS" "INSTALLED"
+            echo "--------------------------------------------------------------------------------------------"
+
+            if [[ -s "$KNOWLEDGE_REGISTRY" ]] && [[ "$(jq length "$KNOWLEDGE_REGISTRY" 2>/dev/null)" -gt 0 ]]; then
+                jq -c '.[]' "$KNOWLEDGE_REGISTRY" 2>/dev/null | while read -r pkg_json; do
+                    local p_name=$(echo "$pkg_json" | jq -r '.name')
+                    local p_ver=$(echo "$pkg_json" | jq -r '.version // "?"')
+                    local p_targets=$(echo "$pkg_json" | jq -r '.targets // "?"')
+                    local p_enabled=$(echo "$pkg_json" | jq -r '.enabled // true')
+                    local p_date=$(echo "$pkg_json" | jq -r '.installedAt // "?"')
+                    local status_str=$([[ "$p_enabled" == "true" ]] && echo "\e[32menabled\e[0m" || echo "\e[33mdisabled\e[0m")
+                    printf "%-20s %-10s %-25s %-8b %s\n" "$p_name" "$p_ver" "$p_targets" "$status_str" "${p_date:0:10}"
+                done
+            else
+                echo "  (no knowledge packages installed)"
+            fi
+            echo ""
+            ;;
+
+        enable)
+            local pkg_name=$2
+            [[ -z "$pkg_name" ]] && error "Usage: tycho knowledge enable <package>"
+
+            local exists=$(jq -r ".[] | select(.name == \"$pkg_name\") | .name" "$KNOWLEDGE_REGISTRY" 2>/dev/null)
+            [[ -z "$exists" ]] && error "Knowledge package '$pkg_name' is not installed."
+
+            # Re-run the post-install hook
+            local target_dir="$KNOWLEDGE_DIR/$pkg_name"
+            local post_hook="$target_dir/.tycho/knowledge/$pkg_name/post-install.sh"
+            if [[ -x "$post_hook" ]]; then
+                log "Re-deploying knowledge package '$pkg_name'..."
+                bash "$post_hook" "$ENV_FILE"
+            fi
+
+            local tmp_file=$(mktemp)
+            jq "(.[] | select(.name == \"$pkg_name\") | .enabled) = true" "$KNOWLEDGE_REGISTRY" > "$tmp_file"
+            mv "$tmp_file" "$KNOWLEDGE_REGISTRY"
+            log "\e[32mKnowledge package '$pkg_name' enabled.\e[0m"
+            ;;
+
+        disable)
+            local pkg_name=$2
+            [[ -z "$pkg_name" ]] && error "Usage: tycho knowledge disable <package>"
+
+            local exists=$(jq -r ".[] | select(.name == \"$pkg_name\") | .name" "$KNOWLEDGE_REGISTRY" 2>/dev/null)
+            [[ -z "$exists" ]] && error "Knowledge package '$pkg_name' is not installed."
+
+            # TODO: Run a disable/cleanup hook if present
+
+            local tmp_file=$(mktemp)
+            jq "(.[] | select(.name == \"$pkg_name\") | .enabled) = false" "$KNOWLEDGE_REGISTRY" > "$tmp_file"
+            mv "$tmp_file" "$KNOWLEDGE_REGISTRY"
+            log "\e[33mKnowledge package '$pkg_name' disabled.\e[0m"
+            log "Package files retained in $KNOWLEDGE_DIR/$pkg_name/"
+            ;;
+
+        update)
+            local pkg_name=$2
+
+            if [[ -n "$pkg_name" ]]; then
+                # Update specific package
+                local pkg_entry=$(jq -c ".[] | select(.name == \"$pkg_name\")" "$KNOWLEDGE_REGISTRY" 2>/dev/null)
+                [[ -z "$pkg_entry" ]] && error "Knowledge package '$pkg_name' is not installed."
+
+                local r_owner=$(echo "$pkg_entry" | jq -r '.owner' | cut -d'/' -f1)
+                local r_repo=$(echo "$pkg_entry" | jq -r '.owner' | cut -d'/' -f2)
+                local r_branch=$(echo "$pkg_entry" | jq -r '.branch')
+
+                fetch_knowledge_package "$r_owner" "$r_repo" "$r_branch" "$pkg_name"
+
+                local post_hook="$KNOWLEDGE_DIR/$pkg_name/.tycho/knowledge/$pkg_name/post-install.sh"
+                if [[ -x "$post_hook" ]]; then
+                    log "Running post-install hook..."
+                    bash "$post_hook" "$ENV_FILE"
+                fi
+
+                # Update installed timestamp
+                local tmp_file=$(mktemp)
+                jq "(.[] | select(.name == \"$pkg_name\") | .installedAt) = \"$(date -Iseconds)\"" "$KNOWLEDGE_REGISTRY" > "$tmp_file"
+                mv "$tmp_file" "$KNOWLEDGE_REGISTRY"
+
+                log "\e[32mKnowledge package '$pkg_name' updated.\e[0m"
+            else
+                # Update all enabled packages
+                log "Updating all enabled knowledge packages..."
+                jq -c '.[] | select(.enabled == true)' "$KNOWLEDGE_REGISTRY" 2>/dev/null | while read -r pkg_json; do
+                    local p_name=$(echo "$pkg_json" | jq -r '.name')
+                    log "Updating $p_name..."
+                    do_knowledge "update" "$p_name"
+                done
+            fi
+            ;;
+
+        uninstall)
+            local pkg_name=$2
+            [[ -z "$pkg_name" ]] && error "Usage: tycho knowledge uninstall <package>"
+
+            local exists=$(jq -r ".[] | select(.name == \"$pkg_name\") | .name" "$KNOWLEDGE_REGISTRY" 2>/dev/null)
+            [[ -z "$exists" ]] && error "Knowledge package '$pkg_name' is not installed."
+
+            read -p "Remove knowledge package '$pkg_name' and all its files? (y/N): " confirm
+            [[ "$confirm" != "y" ]] && exit 0
+
+            rm -rf "$KNOWLEDGE_DIR/$pkg_name"
+
+            local tmp_file=$(mktemp)
+            jq "del(.[] | select(.name == \"$pkg_name\"))" "$KNOWLEDGE_REGISTRY" > "$tmp_file"
+            mv "$tmp_file" "$KNOWLEDGE_REGISTRY"
+
+            log "Knowledge package '$pkg_name' uninstalled."
+            ;;
+
+        *)
+            echo "Usage: tycho knowledge <command>"
+            echo ""
+            echo "Commands:"
+            echo "  list                    List installed knowledge packages"
+            echo "  install [repo/]<name>   Install a knowledge package from a registered repository"
+            echo "  uninstall <name>        Remove an installed knowledge package"
+            echo "  enable <name>           Re-deploy and activate a knowledge package"
+            echo "  disable <name>          Deactivate a knowledge package (keeps files)"
+            echo "  update [<name>]         Update one or all knowledge packages from remote"
+            echo ""
+            ;;
+    esac
+}
+
+
 function usage() {
     echo "Commands:"
     echo "  setup            Initial configuration"
@@ -1615,6 +1901,7 @@ function usage() {
     echo "  install <pkg>    Install a recipe or core service"
     echo "  uninstall <pkg>  Remove a service"
     echo "  repo <cmd>       Manage recipe repositories (add, list, remove, update)"
+    echo "  knowledge <cmd>  Manage knowledge packages (install, list, enable, disable, update)"
     echo "  backup [file]    Backup configurations (metadata) and application databases"
     echo "                   Options:"
     echo "                     --service <name>      Backup only a specific service"
@@ -1661,6 +1948,7 @@ case $1 in
     install|up)  do_install "$2" ;;
     uninstall)   do_uninstall "$2" ;;
     repo)        do_repo "$2" "$3" "$4" ;;
+    knowledge)   do_knowledge "$2" "$3" "$4" ;;
     backup)      shift; do_backup "$@" ;;
     restore)     shift; do_restore "$@" ;;
     stats)       do_stats ;;
