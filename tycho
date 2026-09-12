@@ -502,7 +502,7 @@ function fetch_and_list_recipes() {
     local recipes_json
     recipes_json=$(curl -s -f "$api_url/contents/.tycho/recipes/$PLATFORM?ref=$r_branch")
     if [[ $? -ne 0 ]]; then
-        log "\e[33mWarning: Failed to reach GitHub API for repository '$r_name' ($r_owner/$r_repo).\e[0m"
+        # Silently skip repos with no recipes (e.g. knowledge-only repos)
         return
     fi
 
