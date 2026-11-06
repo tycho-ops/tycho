@@ -46,23 +46,29 @@ Les modules sont installés dans `~/.local/share/tycho/modules` (mode utilisateu
 `/usr/local/share/tycho/modules` (en root), avec un `modules.lock` qui enregistre chaque version
 et son intégrité.
 
-## Cibles
+## Organisations et cibles
 
 Une cible est un environnement de déploiement (un cluster Kubernetes ou un hôte Podman) décrit par
-le `target.yaml` de son propre dépôt (RFC-001 §3). Un même `tycho` gère plusieurs cibles, et chaque
-module agit sur celle qui est sélectionnée :
+le `target.yaml` de son propre dépôt (RFC-001 §3). Une organisation regroupe les cibles d'une
+instance (un client, une entreprise). Un même `tycho` gère plusieurs organisations et cibles, et
+chaque module agit sur la cible sélectionnée ; avec une seule organisation, tout reste dans
+`default`.
 
 ```bash
-tycho context add ~/src/acme/k8s-scaleway-prod     # nom lu dans son target.yaml
-tycho context add ~/src/acme/podman-baremetal-edge
-tycho context list
-tycho context use acme-prod
-tycho orchestration plan                            # cible courante
-tycho orchestration status --target acme-edge       # ou TYCHO_TARGET=acme-edge
+tycho context add ~/src/acme/k8s-scaleway-production    # nom et organisation lus dans target.yaml
+tycho context add ~/src/acme/k8s-scaleway-staging
+tycho context add ~/src/globex/k8s-scaleway-production --org globex
+tycho org list
+tycho org use acme
+tycho context use staging                                # acme/staging
+tycho orchestration plan                                 # cible courante
+tycho orchestration status --target globex/production    # ou TYCHO_TARGET, TYCHO_ORG, --org
 ```
 
-Ordre de sélection : `--target <nom>`, puis `TYCHO_TARGET`, puis la cible courante ; Tycho ne
-devine jamais. Les cibles sont enregistrées dans `~/.config/tycho/targets.json`.
+Sélection : organisation `--org`, sinon `TYCHO_ORG`, sinon l'organisation courante ; cible
+`--target` (`nom` ou `org/nom`), sinon `TYCHO_TARGET`, sinon la cible courante de l'organisation.
+Tycho ne devine jamais. `metadata.organization` dans `target.yaml` rattache une cible à son
+organisation. Les cibles sont enregistrées dans `~/.config/tycho/targets.json`.
 
 ## Développement de modules
 
@@ -77,7 +83,8 @@ construit dont le `package.json` déclare le contrat `tycho`), à la place d'une
 | `TYCHO_REGISTRY_TOKEN` | — | Jeton pour un registre privé |
 | `TYCHO_MODULES_DIR` | voir ci-dessus | Emplacement des modules |
 | `TYCHO_CONFIG_DIR` | `~/.config/tycho` | Emplacement des cibles enregistrées |
-| `TYCHO_TARGET` | — | Cible de la commande, à la place de la cible courante |
+| `TYCHO_ORG` | — | Organisation de la commande, à la place de l'organisation courante |
+| `TYCHO_TARGET` | — | Cible de la commande (`nom` ou `org/nom`), à la place de la cible courante |
 | `NO_COLOR` | — | Désactive les couleurs |
 
 ## Conception

@@ -46,6 +46,8 @@ export async function runModule(ctx: CoreContext, name: string, command: string,
    }
    const env = { ...ctx.env };
    if (selection.target) {
+      env.TYCHO_TARGET_ORG = selection.target.org;
+      env.TYCHO_TARGET_ID = selection.target.id;
       env.TYCHO_TARGET_NAME = selection.target.name;
       env.TYCHO_TARGET_PATH = selection.target.path;
       env.TYCHO_TARGET_ENGINE = selection.target.engine;

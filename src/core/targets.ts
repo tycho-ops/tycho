@@ -1,8 +1,12 @@
 /**
- * Targets (contexts): one `tycho` manages several targets, each one a target repository holding a
- * `target.yaml` (RFC-001 §3). The list is shared by every module: select a target once, then
- * `tycho orchestration`, `tycho containers`, `tycho security`… act on it.
- * Resolution never guesses: `--target <name>`, else TYCHO_TARGET, else the current target.
+ * Organisations and targets (contexts). A target is a deployment environment described by the
+ * `target.yaml` of its repository (RFC-001 §3); an organisation groups the targets of one
+ * instance (one customer, one company). One `tycho` manages several organisations, each with
+ * several targets; operators with a single organisation stay on `default`.
+ * The list is shared by every module: select once, then `tycho orchestration`, `tycho security`…
+ * act on the selection. Resolution never guesses:
+ *   organisation: --org, else TYCHO_ORG, else the current organisation;
+ *   target: --target (`name` or `org/name`), else TYCHO_TARGET, else the organisation's current target.
  * @license AGPL-3.0-only
  */
 
@@ -13,18 +17,30 @@ import { isAbsolute, join, resolve } from "path";
 /** Engine of a target, read from `spec.engine` of its `target.yaml`. */
 export type TargetEngine = "kubernetes" | "podman";
 
+/** Organisation of targets that declare none. */
+export const DEFAULT_ORG = "default";
+
 /** A registered target. */
 export interface TargetEntry {
+   org: string;
    name: string;
+   /** `org/name`: unique on the workstation (kubeconfigs, cluster markers…). */
+   id: string;
    /** Absolute path of the target repository. */
    path: string;
    engine: TargetEngine;
 }
 
-/** Content of the targets file. */
-export interface TargetsFile {
+interface OrgEntry {
    current: string | null;
    targets: Record<string, { path: string; engine: TargetEngine }>;
+}
+
+/** Content of the targets file. */
+export interface TargetsFile {
+   version: 2;
+   currentOrg: string;
+   orgs: Record<string, OrgEntry>;
 }
 
 const NAME = /^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$/;
@@ -46,16 +62,20 @@ function targetsFile(env: Record<string, string | undefined>): string {
 }
 
 /**
- * Reads the registered targets (empty when none).
+ * Reads the registered organisations and targets.
  * @param env Process environment.
- * @returns The targets file content.
+ * @returns The targets file content (empty `default` organisation when none).
  */
 export function readTargets(env: Record<string, string | undefined>): TargetsFile {
    const file = targetsFile(env);
    if (!existsSync(file)) {
-      return { current: null, targets: {} };
+      return { version: 2, currentOrg: DEFAULT_ORG, orgs: {} };
    }
-   return JSON.parse(readFileSync(file, "utf-8")) as TargetsFile;
+   const content = JSON.parse(readFileSync(file, "utf-8")) as TargetsFile;
+   if (content.version !== 2) {
+      throw new Error(`${file}: unsupported format, remove it and register the targets again`);
+   }
+   return content;
 }
 
 function writeTargets(content: TargetsFile, env: Record<string, string | undefined>): void {
@@ -67,80 +87,141 @@ function writeTargets(content: TargetsFile, env: Record<string, string | undefin
    renameSync(temporary, file);
 }
 
+function assertName(value: string, what: string): void {
+   if (!NAME.test(value)) {
+      throw new Error(`invalid ${what} "${value}": lowercase letters, digits and dashes`);
+   }
+}
+
 /**
- * Reads the name and engine declared by a target repository.
- * @param path Target repository.
- * @returns Name (`metadata.name`) and engine (`spec.engine`).
- * @throws Error when `target.yaml` is missing or does not declare them.
+ * Splits `org/name` or `name`.
+ * @param ref Target reference.
+ * @returns Organisation (null when not given) and name.
  */
-export function readTargetIdentity(path: string): { name: string; engine: TargetEngine } {
+export function parseTargetRef(ref: string): { org: string | null; name: string } {
+   const parts = ref.split("/");
+   if (parts.length > 2) {
+      throw new Error(`invalid target "${ref}": name or org/name`);
+   }
+   const [org, name] = parts.length === 2 ? [parts[0], parts[1]] : [null, parts[0]];
+   if (org !== null) {
+      assertName(org, "organisation");
+   }
+   assertName(name, "target name");
+   return { org, name };
+}
+
+/**
+ * Reads the identity declared by a target repository.
+ * @param path Target repository.
+ * @returns Name (`metadata.name`), organisation (`metadata.organization`, if any) and engine.
+ * @throws Error when `target.yaml` is missing or invalid.
+ */
+export function readTargetIdentity(path: string): { name: string; org: string | null; engine: TargetEngine } {
    const file = join(path, "target.yaml");
    if (!existsSync(file)) {
       throw new Error(`${file} not found`);
    }
-   const doc = Bun.YAML.parse(readFileSync(file, "utf-8")) as { metadata?: { name?: unknown }; spec?: { engine?: unknown } };
+   const doc = Bun.YAML.parse(readFileSync(file, "utf-8")) as {
+      metadata?: { name?: unknown; organization?: unknown };
+      spec?: { engine?: unknown };
+   };
    const name = doc?.metadata?.name;
+   const org = doc?.metadata?.organization;
    const engine = doc?.spec?.engine;
    if (typeof name !== "string" || !NAME.test(name)) {
       throw new Error(`${file}: metadata.name is missing or invalid`);
    }
+   if (org !== undefined && (typeof org !== "string" || !NAME.test(org))) {
+      throw new Error(`${file}: metadata.organization is invalid`);
+   }
    if (engine !== "kubernetes" && engine !== "podman") {
       throw new Error(`${file}: spec.engine must be kubernetes or podman`);
    }
-   return { name, engine };
+   return { name, org: (org as string | undefined) ?? null, engine };
 }
 
 /**
- * Registers a target repository. The name must match `metadata.name` of its `target.yaml`,
- * so that a name always designates the same target on every workstation.
+ * Registers a target repository. Its name is `metadata.name` of its `target.yaml`; its
+ * organisation is `metadata.organization`, else `orgFlag`, else the current organisation.
  * @param path Target repository.
  * @param env Process environment.
+ * @param orgFlag Value of `--org`, if given.
  * @returns The registered target.
- * @throws Error when the name is already registered for another path.
+ * @throws Error when the organisations disagree or the name is taken by another path.
  */
-export function addTarget(path: string, env: Record<string, string | undefined>): TargetEntry {
+export function addTarget(path: string, env: Record<string, string | undefined>, orgFlag?: string): TargetEntry {
    const absolute = isAbsolute(path) ? path : resolve(path);
-   const { name, engine } = readTargetIdentity(absolute);
+   const identity = readTargetIdentity(absolute);
    const content = readTargets(env);
-   const existing = content.targets[name];
+   if (identity.org && orgFlag && identity.org !== orgFlag) {
+      throw new Error(`target.yaml declares organisation ${identity.org}, --org says ${orgFlag}`);
+   }
+   const org = identity.org ?? orgFlag ?? env.TYCHO_ORG ?? content.currentOrg;
+   assertName(org, "organisation");
+   const entry = (content.orgs[org] ??= { current: null, targets: {} });
+   const existing = entry.targets[identity.name];
    if (existing && existing.path !== absolute) {
-      throw new Error(`target ${name} is already registered for ${existing.path}`);
+      throw new Error(`target ${org}/${identity.name} is already registered for ${existing.path}`);
    }
-   content.targets[name] = { path: absolute, engine };
-   if (content.current === null) {
-      content.current = name;
-   }
+   entry.targets[identity.name] = { path: absolute, engine: identity.engine };
+   entry.current ??= identity.name;
    writeTargets(content, env);
-   return { name, path: absolute, engine };
+   return { org, name: identity.name, id: `${org}/${identity.name}`, path: absolute, engine: identity.engine };
 }
 
 /**
- * Selects the current target.
- * @param name Target name.
+ * Selects the current organisation.
+ * @param org Organisation name.
  * @param env Process environment.
  */
-export function useTarget(name: string, env: Record<string, string | undefined>): void {
+export function useOrg(org: string, env: Record<string, string | undefined>): void {
    const content = readTargets(env);
-   if (!content.targets[name]) {
-      throw new Error(`unknown target ${name} (tycho context list)`);
+   if (!content.orgs[org]) {
+      throw new Error(`unknown organisation ${org} (it exists once a target is added: tycho context add <dir> --org ${org})`);
    }
-   content.current = name;
+   content.currentOrg = org;
    writeTargets(content, env);
 }
 
 /**
- * Forgets a target; its repository is left untouched.
- * @param name Target name.
+ * Selects the current target; `org/name` also selects its organisation.
+ * @param ref `name` (in the current organisation) or `org/name`.
+ * @param env Process environment.
+ * @returns The selected target id.
+ */
+export function useTarget(ref: string, env: Record<string, string | undefined>): string {
+   const content = readTargets(env);
+   const { org: given, name } = parseTargetRef(ref);
+   const org = given ?? content.currentOrg;
+   if (!content.orgs[org]?.targets[name]) {
+      throw new Error(`unknown target ${org}/${name} (tycho context list --all)`);
+   }
+   content.currentOrg = org;
+   content.orgs[org].current = name;
+   writeTargets(content, env);
+   return `${org}/${name}`;
+}
+
+/**
+ * Forgets a target; its repository is left untouched. An organisation left empty is removed.
+ * @param ref `name` (in the current organisation) or `org/name`.
  * @param env Process environment.
  */
-export function removeTarget(name: string, env: Record<string, string | undefined>): void {
+export function removeTarget(ref: string, env: Record<string, string | undefined>): void {
    const content = readTargets(env);
-   if (!content.targets[name]) {
-      throw new Error(`unknown target ${name}`);
+   const { org: given, name } = parseTargetRef(ref);
+   const org = given ?? content.currentOrg;
+   const entry = content.orgs[org];
+   if (!entry?.targets[name]) {
+      throw new Error(`unknown target ${org}/${name}`);
    }
-   delete content.targets[name];
-   if (content.current === name) {
-      content.current = null;
+   delete entry.targets[name];
+   if (entry.current === name) {
+      entry.current = null;
+   }
+   if (Object.keys(entry.targets).length === 0) {
+      delete content.orgs[org];
    }
    writeTargets(content, env);
 }
@@ -149,53 +230,78 @@ export function removeTarget(name: string, env: Record<string, string | undefine
 export type TargetResolution = { target: TargetEntry; error: null } | { target: null; error: string };
 
 /**
- * Resolves the target of a command: `--target`, else TYCHO_TARGET, else the current target.
- * An explicitly requested target that is unknown is an error; no selection at all is not
- * (commands that need no target still run), the module reports it when it needs one.
- * @param flag Value of `--target`, if given.
+ * Resolves the organisation of a command: `--org`, else TYCHO_ORG, else the current one.
+ * @param orgFlag Value of `--org`, if given.
  * @param env Process environment.
- * @returns The target, or why there is none.
- * @throws Error when `--target` or TYCHO_TARGET names an unknown target.
  */
-export function resolveTarget(flag: string | undefined, env: Record<string, string | undefined>): TargetResolution {
+export function resolveOrg(orgFlag: string | undefined, env: Record<string, string | undefined>): string {
+   return orgFlag ?? env.TYCHO_ORG ?? readTargets(env).currentOrg;
+}
+
+/**
+ * Resolves the target of a command. An explicitly requested target or organisation that is
+ * unknown is an error; no selection at all is not (commands that need no target still run),
+ * the module reports it when it needs one.
+ * @param targetFlag Value of `--target` (`name` or `org/name`), if given.
+ * @param env Process environment.
+ * @param orgFlag Value of `--org`, if given.
+ * @returns The target, or why there is none.
+ * @throws Error when an explicit target or organisation is unknown.
+ */
+export function resolveTarget(targetFlag: string | undefined, env: Record<string, string | undefined>, orgFlag?: string): TargetResolution {
    const content = readTargets(env);
-   const explicit = flag ?? env.TYCHO_TARGET;
-   const name = explicit ?? content.current;
-   if (!name) {
-      return { target: null, error: "no target selected: tycho context use <name>, or --target <name>" };
+   const explicitRef = targetFlag ?? env.TYCHO_TARGET;
+   const parsed = explicitRef ? parseTargetRef(explicitRef) : null;
+   if (parsed?.org && orgFlag && parsed.org !== orgFlag) {
+      throw new Error(`--target ${explicitRef} is not in --org ${orgFlag}`);
    }
-   const entry = content.targets[name];
+   const explicitOrg = parsed?.org ?? orgFlag ?? env.TYCHO_ORG;
+   const org = explicitOrg ?? content.currentOrg;
+   const entry = content.orgs[org];
    if (!entry) {
-      const message = `unknown target ${name} (tycho context add <path>)`;
-      if (explicit) {
+      const message = `unknown organisation ${org} (tycho org list)`;
+      if (explicitOrg) {
+         throw new Error(message);
+      }
+      return { target: null, error: `no target registered in organisation ${org}: tycho context add <dir>` };
+   }
+   const name = parsed?.name ?? entry.current;
+   if (!name) {
+      return { target: null, error: `no target selected in organisation ${org}: tycho context use <name>, or --target <name>` };
+   }
+   const target = entry.targets[name];
+   if (!target) {
+      const message = `unknown target ${org}/${name} (tycho context list)`;
+      if (parsed) {
          throw new Error(message);
       }
       return { target: null, error: message };
    }
-   return { target: { name, path: entry.path, engine: entry.engine }, error: null };
+   return { target: { org, name, id: `${org}/${name}`, path: target.path, engine: target.engine }, error: null };
 }
 
 /**
- * Removes `--target <name>` / `--target=<name>` from the arguments of a module command.
+ * Removes the selection flags (`--target`, `--org`, with a space or `=`) from the arguments of a
+ * module command.
  * @param args Arguments after the module command.
- * @returns The remaining arguments and the flag value.
+ * @returns The remaining arguments and the flag values.
  */
-export function extractTargetFlag(args: string[]): { args: string[]; target: string | undefined } {
+export function extractSelectionFlags(args: string[]): { args: string[]; target: string | undefined; org: string | undefined } {
    const remaining: string[] = [];
-   let target: string | undefined;
+   const found: Record<"target" | "org", string | undefined> = { target: undefined, org: undefined };
    for (let i = 0; i < args.length; i++) {
       const arg = args[i];
-      if (arg === "--target") {
-         target = args[i + 1];
-         i++;
-         if (target === undefined) {
-            throw new Error("--target needs a target name");
-         }
-      } else if (arg.startsWith("--target=")) {
-         target = arg.slice("--target=".length);
-      } else {
+      const match = /^--(target|org)(?:=(.*))?$/.exec(arg);
+      if (!match) {
          remaining.push(arg);
+         continue;
       }
+      const key = match[1] as "target" | "org";
+      const value = match[2] ?? args[++i];
+      if (value === undefined || value === "") {
+         throw new Error(`--${key} needs a value`);
+      }
+      found[key] = value;
    }
-   return { args: remaining, target };
+   return { args: remaining, ...found };
 }

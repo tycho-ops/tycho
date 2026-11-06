@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "
 import { tmpdir } from "os";
 import { join } from "path";
 import { createContext } from "./context";
-import { addTarget, extractTargetFlag, readTargets, removeTarget, resolveTarget, useTarget } from "./targets";
+import { addTarget, extractSelectionFlags, parseTargetRef, readTargetIdentity, readTargets, removeTarget, resolveTarget, useOrg, useTarget } from "./targets";
 import { runModule } from "../modules/runner";
 import { findModuleForCommand, linkModule, readLock } from "../modules/store";
 
@@ -14,45 +14,64 @@ function targetRepo(root: string, name: string, engine: string): string {
    return dir;
 }
 
-describe("targets shared by every module", () => {
+function orgRepo(root: string, dir: string, name: string, engine: string, org?: string): string {
+   const path = join(root, dir);
+   mkdirSync(path, { recursive: true });
+   const orgLine = org ? `  organization: ${org}\n` : "";
+   writeFileSync(join(path, "target.yaml"), `apiVersion: tycho.qtrn.io/v1alpha1\nkind: Target\nmetadata:\n  name: ${name}\n${orgLine}spec:\n  engine: ${engine}\n`);
+   return path;
+}
+
+describe("organisations and targets shared by every module", () => {
    const root = mkdtempSync(join(tmpdir(), "tycho-targets-"));
    const env = { TYCHO_CONFIG_DIR: join(root, "config") };
 
-   test("registers targets by the name of their target.yaml, first one becomes current", () => {
-      expect(resolveTarget(undefined, env)).toEqual({ target: null, error: expect.stringContaining("no target selected") });
-      const prod = addTarget(targetRepo(root, "acme-prod", "kubernetes"), env);
-      const edge = addTarget(targetRepo(root, "acme-edge", "podman"), env);
-      expect(prod).toMatchObject({ name: "acme-prod", engine: "kubernetes" });
-      expect(edge.engine).toBe("podman");
-      expect(readTargets(env).current).toBe("acme-prod");
+   test("single organisation users stay on default", () => {
+      expect(resolveTarget(undefined, env)).toEqual({ target: null, error: expect.stringContaining("no target registered in organisation default") });
+      const solo = addTarget(orgRepo(root, "solo", "prod", "kubernetes"), env);
+      expect(solo).toMatchObject({ org: "default", name: "prod", id: "default/prod" });
+      expect(resolveTarget(undefined, env).target?.id).toBe("default/prod");
       expect((lstatSync(join(env.TYCHO_CONFIG_DIR, "targets.json")).mode & 0o777).toString(8)).toBe("600");
    });
 
-   test("resolution: --target, then TYCHO_TARGET, then current; an unknown explicit name fails", () => {
-      useTarget("acme-edge", env);
-      expect(resolveTarget(undefined, env).target?.name).toBe("acme-edge");
-      expect(resolveTarget(undefined, { ...env, TYCHO_TARGET: "acme-prod" }).target?.name).toBe("acme-prod");
-      expect(resolveTarget("acme-prod", { ...env, TYCHO_TARGET: "acme-edge" }).target?.name).toBe("acme-prod");
-      expect(() => resolveTarget("nope", env)).toThrow(/unknown target nope/);
-      expect(() => useTarget("nope", env)).toThrow(/unknown target/);
+   test("the organisation comes from target.yaml, else --org; the same name may exist in two organisations", () => {
+      const a = addTarget(orgRepo(root, "acme-prod", "production", "kubernetes", "acme"), env);
+      const b = addTarget(orgRepo(root, "globex-prod", "production", "kubernetes"), env, "globex");
+      addTarget(orgRepo(root, "acme-edge", "edge", "podman", "acme"), env);
+      expect([a.id, b.id]).toEqual(["acme/production", "globex/production"]);
+      expect(() => addTarget(orgRepo(root, "acme-x", "x", "kubernetes", "acme"), env, "globex")).toThrow(/declares organisation acme/);
+      expect(() => addTarget(orgRepo(root, "acme-prod-2", "production", "kubernetes", "acme"), env)).toThrow(/already registered/);
    });
 
-   test("refuses a repository without a valid target.yaml, and a name taken by another path", () => {
-      expect(() => addTarget(join(root, "missing"), env)).toThrow(/not found/);
-      expect(() => addTarget(targetRepo(join(root, "other"), "acme-prod", "kubernetes"), env)).toThrow(/already registered/);
-      expect(() => addTarget(targetRepo(root, "bad-engine", "vm"), env)).toThrow(/spec.engine/);
+   test("resolution: --org/--target, then TYCHO_ORG/TYCHO_TARGET, then current", () => {
+      useOrg("acme", env);
+      expect(readTargets(env).currentOrg).toBe("acme");
+      expect(resolveTarget(undefined, env).target?.id).toBe("acme/production");
+      expect(resolveTarget("edge", env).target?.id).toBe("acme/edge");
+      expect(resolveTarget("globex/production", env).target?.id).toBe("globex/production");
+      expect(resolveTarget(undefined, env, "globex").target?.id).toBe("globex/production");
+      expect(resolveTarget(undefined, { ...env, TYCHO_ORG: "default" }).target?.id).toBe("default/prod");
+      expect(resolveTarget(undefined, { ...env, TYCHO_TARGET: "acme/edge" }).target?.engine).toBe("podman");
+      expect(() => resolveTarget("acme/production", env, "globex")).toThrow(/not in --org globex/);
+      expect(() => resolveTarget("nope", env)).toThrow(/unknown target acme\/nope/);
+      expect(() => resolveTarget(undefined, env, "initech")).toThrow(/unknown organisation initech/);
+      expect(() => useOrg("initech", env)).toThrow(/unknown organisation/);
    });
 
-   test("removing the current target leaves no current target", () => {
-      removeTarget("acme-edge", env);
-      expect(readTargets(env).current).toBeNull();
+   test("use org/name switches organisation; removing the last target removes the organisation", () => {
+      expect(useTarget("globex/production", env)).toBe("globex/production");
+      expect(readTargets(env).currentOrg).toBe("globex");
+      removeTarget("globex/production", env);
+      expect(readTargets(env).orgs.globex).toBeUndefined();
       expect(resolveTarget(undefined, env).target).toBeNull();
+      expect(() => readTargetIdentity(join(root, "missing"))).toThrow(/not found/);
+      expect(() => addTarget(orgRepo(root, "bad", "bad", "vm"), env, "acme")).toThrow(/spec.engine/);
    });
 
-   test("--target is removed from the module arguments", () => {
-      expect(extractTargetFlag(["plan", "--target", "acme-prod", "--yes"])).toEqual({ args: ["plan", "--yes"], target: "acme-prod" });
-      expect(extractTargetFlag(["--target=acme-prod", "status"])).toEqual({ args: ["status"], target: "acme-prod" });
-      expect(() => extractTargetFlag(["--target"])).toThrow(/needs a target name/);
+   test("selection flags are removed from the module arguments", () => {
+      expect(extractSelectionFlags(["plan", "--target", "acme/production", "--yes", "--org=acme"])).toEqual({ args: ["plan", "--yes"], target: "acme/production", org: "acme" });
+      expect(() => extractSelectionFlags(["--org"])).toThrow(/needs a value/);
+      expect(() => parseTargetRef("a/b/c")).toThrow(/org\/name/);
    });
 });
 
@@ -74,7 +93,7 @@ describe("module link and target hand-over", () => {
       addTarget(repo, ctx.env);
       expect(await runModule(ctx, "orchestration", "orchestration", ["status"], resolveTarget(undefined, ctx.env))).toBe(0);
       const seen = (globalThis as unknown as { __seen: { args: string[]; target: { name: string }; error: null; env: string } }).__seen;
-      expect(seen).toMatchObject({ args: ["status"], target: { name: "acme-prod", engine: "kubernetes" }, error: null, env: repo });
+      expect(seen).toMatchObject({ args: ["status"], target: { org: "default", name: "acme-prod", id: "default/acme-prod", engine: "kubernetes" }, error: null, env: repo });
    });
 
    test("link refuses a directory that is not an official module or is not built", () => {

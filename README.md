@@ -46,23 +46,28 @@ Modules are installed in `~/.local/share/tycho/modules` (user mode) or
 `/usr/local/share/tycho/modules` (as root), with a `modules.lock` recording each version and its
 integrity.
 
-## Targets
+## Organisations and targets
 
 A target is a deployment environment (a Kubernetes cluster or a Podman host) described by the
-`target.yaml` of its own repository (RFC-001 §3). One `tycho` manages several targets, and every
-module acts on the selected one:
+`target.yaml` of its own repository (RFC-001 §3). An organisation groups the targets of one
+instance (a customer, a company). One `tycho` manages several organisations and targets, and every
+module acts on the selected one; with a single organisation, everything stays in `default`.
 
 ```bash
-tycho context add ~/src/acme/k8s-scaleway-prod     # name read from its target.yaml
-tycho context add ~/src/acme/podman-baremetal-edge
-tycho context list
-tycho context use acme-prod
-tycho orchestration plan                            # current target
-tycho orchestration status --target acme-edge       # or TYCHO_TARGET=acme-edge
+tycho context add ~/src/acme/k8s-scaleway-production    # name and organisation from target.yaml
+tycho context add ~/src/acme/k8s-scaleway-staging
+tycho context add ~/src/globex/k8s-scaleway-production --org globex
+tycho org list
+tycho org use acme
+tycho context use staging                                # acme/staging
+tycho orchestration plan                                 # current target
+tycho orchestration status --target globex/production    # or TYCHO_TARGET, TYCHO_ORG, --org
 ```
 
-Selection order: `--target <name>`, then `TYCHO_TARGET`, then the current target; Tycho never
-guesses. Targets are kept in `~/.config/tycho/targets.json`.
+Selection: organisation `--org`, else `TYCHO_ORG`, else the current one; target `--target`
+(`name` or `org/name`), else `TYCHO_TARGET`, else the organisation's current target. Tycho never
+guesses. `metadata.organization` in `target.yaml` pins a target to its organisation. Targets are
+kept in `~/.config/tycho/targets.json`.
 
 ## Module development
 
@@ -77,7 +82,8 @@ guesses. Targets are kept in `~/.config/tycho/targets.json`.
 | `TYCHO_REGISTRY_TOKEN` | — | Token for a private registry |
 | `TYCHO_MODULES_DIR` | see above | Where modules are installed |
 | `TYCHO_CONFIG_DIR` | `~/.config/tycho` | Where targets are registered |
-| `TYCHO_TARGET` | — | Target of the command, instead of the current one |
+| `TYCHO_ORG` | — | Organisation of the command, instead of the current one |
+| `TYCHO_TARGET` | — | Target of the command (`name` or `org/name`), instead of the current one |
 | `NO_COLOR` | — | Disables colours |
 
 ## Design
