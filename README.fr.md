@@ -63,7 +63,12 @@ tycho org use acme
 tycho context use staging                                # acme/staging
 tycho orchestration plan                                 # cible courante
 tycho orchestration status --target globex/production    # ou TYCHO_TARGET, TYCHO_ORG, --org
+tycho -c globex:production orchestration status          # forme courte, avant la commande
 ```
+
+Les options courtes se placent **avant** la commande : `-c <org>:<contexte>` (ou `-c <contexte>`
+dans l'organisation courante) et `-o <org>`. Après la commande, `-c` et `-o` appartiennent au module
+(git les utilise) : seules les options longues `--context` (alias `--target`) et `--org` y sont lues.
 
 Sélection : organisation `--org`, sinon `TYCHO_ORG`, sinon l'organisation courante ; cible
 `--target` (`nom` ou `org/nom`), sinon `TYCHO_TARGET`, sinon la cible courante de l'organisation.

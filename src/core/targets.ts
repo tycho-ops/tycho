@@ -94,14 +94,14 @@ function assertName(value: string, what: string): void {
 }
 
 /**
- * Splits `org/name` or `name`.
+ * Splits a target reference: `name`, `org/name` or `org:name`.
  * @param ref Target reference.
  * @returns Organisation (null when not given) and name.
  */
 export function parseTargetRef(ref: string): { org: string | null; name: string } {
-   const parts = ref.split("/");
+   const parts = ref.split(/[/:]/);
    if (parts.length > 2) {
-      throw new Error(`invalid target "${ref}": name or org/name`);
+      throw new Error(`invalid target "${ref}": name, org:name or org/name`);
    }
    const [org, name] = parts.length === 2 ? [parts[0], parts[1]] : [null, parts[0]];
    if (org !== null) {
@@ -280,28 +280,80 @@ export function resolveTarget(targetFlag: string | undefined, env: Record<string
    return { target: { org, name, id: `${org}/${name}`, path: target.path, engine: target.engine }, error: null };
 }
 
+/** Selection given on a command line. */
+export interface Selection {
+   target: string | undefined;
+   org: string | undefined;
+}
+
+function setOnce(found: Selection, key: keyof Selection, value: string | undefined, flag: string): void {
+   if (value === undefined || value === "" || value.startsWith("-")) {
+      throw new Error(`${flag} needs a value`);
+   }
+   if (found[key] !== undefined && found[key] !== value) {
+      throw new Error(`${flag} ${value} conflicts with ${found[key]}`);
+   }
+   found[key] = value;
+}
+
 /**
- * Removes the selection flags (`--target`, `--org`, with a space or `=`) from the arguments of a
- * module command.
+ * Removes the long selection flags (`--target` or its alias `--context`, `--org`, with a space or
+ * `=`) from the arguments of a module command. Short flags are only read before the command (see
+ * `extractLeadingSelection`): after it they belong to the module (git uses `-c` and `-o`).
  * @param args Arguments after the module command.
  * @returns The remaining arguments and the flag values.
  */
-export function extractSelectionFlags(args: string[]): { args: string[]; target: string | undefined; org: string | undefined } {
+export function extractSelectionFlags(args: string[]): { args: string[] } & Selection {
    const remaining: string[] = [];
-   const found: Record<"target" | "org", string | undefined> = { target: undefined, org: undefined };
+   const found: Selection = { target: undefined, org: undefined };
    for (let i = 0; i < args.length; i++) {
       const arg = args[i];
-      const match = /^--(target|org)(?:=(.*))?$/.exec(arg);
+      const match = /^--(target|context|org)(?:=(.*))?$/.exec(arg);
       if (!match) {
          remaining.push(arg);
          continue;
       }
-      const key = match[1] as "target" | "org";
+      const key = match[1] === "org" ? "org" : "target";
       const value = match[2] ?? args[++i];
-      if (value === undefined || value === "") {
-         throw new Error(`--${key} needs a value`);
-      }
-      found[key] = value;
+      setOnce(found, key, value, `--${match[1]}`);
    }
    return { args: remaining, ...found };
+}
+
+/**
+ * Reads the selection options placed before the command: `-c <org>:<context>` (or `-c <context>`,
+ * `--context`, `--target`) and `-o <org>` (`--org`).
+ * @param argv Arguments after `tycho`.
+ * @returns The selection and the arguments from the command on.
+ */
+export function extractLeadingSelection(argv: string[]): { rest: string[] } & Selection {
+   const found: Selection = { target: undefined, org: undefined };
+   let i = 0;
+   for (; i < argv.length; i++) {
+      const arg = argv[i];
+      const match = /^(-c|-o|--context|--target|--org)(?:=(.*))?$/.exec(arg);
+      if (!match) {
+         break;
+      }
+      const key = match[1] === "-o" || match[1] === "--org" ? "org" : "target";
+      const value = match[2] ?? argv[++i];
+      setOnce(found, key, value, match[1]);
+   }
+   return { rest: argv.slice(i), ...found };
+}
+
+/**
+ * Merges the selection given before the command with the one given after it.
+ * @throws Error when both give different values for the same option.
+ */
+export function mergeSelection(before: Selection, after: Selection): Selection {
+   const merged: Selection = { target: undefined, org: undefined };
+   for (const key of ["target", "org"] as const) {
+      for (const value of [before[key], after[key]]) {
+         if (value !== undefined) {
+            setOnce(merged, key, value, key === "org" ? "--org" : "--target");
+         }
+      }
+   }
+   return merged;
 }

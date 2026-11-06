@@ -8,7 +8,18 @@
 import { createContext, CORE_VERSION } from "./core/context";
 import { runModule } from "./modules/runner";
 import { findModuleForCommand, installModule, linkModule, readLock, removeModule } from "./modules/store";
-import { addTarget, extractSelectionFlags, readTargets, removeTarget, resolveOrg, resolveTarget, useOrg, useTarget } from "./core/targets";
+import {
+   addTarget,
+   extractLeadingSelection,
+   extractSelectionFlags,
+   mergeSelection,
+   readTargets,
+   removeTarget,
+   resolveOrg,
+   resolveTarget,
+   useOrg,
+   useTarget,
+} from "./core/targets";
 
 /** Official modules, shown by `tycho help` and suggested when a command is unknown. */
 const OFFICIAL_MODULES: Record<string, string> = {
@@ -30,14 +41,15 @@ const RESET = paint("\x1b[0m");
 const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
 const ctx = createContext(process.env, isRoot);
 const token = process.env.TYCHO_REGISTRY_TOKEN || undefined;
-const [command, ...rest] = process.argv.slice(2);
+const leading = extractLeadingSelection(process.argv.slice(2));
+const [command, ...rest] = leading.rest;
 
 /** Prints the general help. */
 function printHelp(): void {
    const lock = readLock(ctx);
    console.log(`${BOLD}Tycho ${CORE_VERSION}${RESET} ${DIM}(${ctx.mode} mode)${RESET}
 
-Usage: tycho <command> [arguments]
+Usage: tycho [-c <org>:<context>] [-o <org>] <command> [arguments]
 
 Core commands:
   module add <name>[@<range>]   Install or upgrade a module from ${ctx.registry}
@@ -55,8 +67,10 @@ Core commands:
   version                       Print the core version
   help                          Show this help
 
-Every module command accepts --org <org> and --target <name|org/name>
-(else TYCHO_ORG / TYCHO_TARGET, else the current organisation and target).
+Selection, for every module command:
+  tycho -c <org>:<context> <command> ...   short form, before the command (-c <context>, -o <org>)
+  --context|--target <name|org:name>, --org <org>   anywhere
+  else TYCHO_TARGET / TYCHO_ORG, else the current organisation and target.
 
 Modules:`);
    for (const [name, description] of Object.entries(OFFICIAL_MODULES)) {
@@ -163,7 +177,8 @@ function orgCommand(args: string[]): number {
  */
 function contextCommand(argv: string[]): number {
    const all = argv.includes("--all");
-   const { args, org: orgFlag } = extractSelectionFlags(argv.filter((a) => a !== "--all"));
+   const { args, org: trailingOrg } = extractSelectionFlags(argv.filter((a) => a !== "--all"));
+   const orgFlag = mergeSelection(leading, { target: undefined, org: trailingOrg }).org;
    const [action, value] = args;
    if (!action || action === "list") {
       const content = readTargets(ctx.env);
@@ -237,7 +252,8 @@ async function main(): Promise<number> {
    }
    const moduleName = findModuleForCommand(ctx, command);
    if (moduleName) {
-      const { args, target, org } = extractSelectionFlags(rest);
+      const { args, ...after } = extractSelectionFlags(rest);
+      const { target, org } = mergeSelection(leading, after);
       return runModule(ctx, moduleName, command, args, resolveTarget(target, ctx.env, org));
    }
    if (command in OFFICIAL_MODULES || command === "sec") {

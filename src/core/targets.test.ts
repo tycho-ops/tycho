@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "
 import { tmpdir } from "os";
 import { join } from "path";
 import { createContext } from "./context";
-import { addTarget, extractSelectionFlags, parseTargetRef, readTargetIdentity, readTargets, removeTarget, resolveTarget, useOrg, useTarget } from "./targets";
+import { addTarget, extractLeadingSelection, extractSelectionFlags, mergeSelection, parseTargetRef, readTargetIdentity, readTargets, removeTarget, resolveTarget, useOrg, useTarget } from "./targets";
 import { runModule } from "../modules/runner";
 import { findModuleForCommand, linkModule, readLock } from "../modules/store";
 
@@ -66,6 +66,20 @@ describe("organisations and targets shared by every module", () => {
       expect(resolveTarget(undefined, env).target).toBeNull();
       expect(() => readTargetIdentity(join(root, "missing"))).toThrow(/not found/);
       expect(() => addTarget(orgRepo(root, "bad", "bad", "vm"), env, "acme")).toThrow(/spec.engine/);
+   });
+
+   test("short selection before the command: -c org:context, -o org", () => {
+      expect(parseTargetRef("acme:production")).toEqual({ org: "acme", name: "production" });
+      expect(extractLeadingSelection(["-c", "acme:production", "orchestration", "plan", "-c", "x"])).toEqual({ rest: ["orchestration", "plan", "-c", "x"], target: "acme:production", org: undefined });
+      expect(extractLeadingSelection(["-o", "acme", "--context=edge", "status"])).toEqual({ rest: ["status"], target: "edge", org: "acme" });
+      expect(extractLeadingSelection(["forge", "commit", "-o"])).toEqual({ rest: ["forge", "commit", "-o"], target: undefined, org: undefined });
+      expect(() => extractLeadingSelection(["-c"])).toThrow(/needs a value/);
+      expect(() => extractLeadingSelection(["-c", "-o", "x"])).toThrow(/needs a value/);
+      expect(mergeSelection({ target: "acme:production", org: undefined }, { target: undefined, org: "acme" })).toEqual({ target: "acme:production", org: "acme" });
+      expect(mergeSelection({ target: undefined, org: undefined }, { target: undefined, org: undefined })).toEqual({ target: undefined, org: undefined });
+      expect(() => mergeSelection({ target: "a", org: undefined }, { target: "b", org: undefined })).toThrow(/conflicts/);
+      expect(resolveTarget("acme:edge", env).target?.id).toBe("acme/edge");
+      expect(extractSelectionFlags(["plan", "--context", "acme:edge"])).toEqual({ args: ["plan"], target: "acme:edge", org: undefined });
    });
 
    test("selection flags are removed from the module arguments", () => {
