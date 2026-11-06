@@ -36,11 +36,11 @@ tycho module remove forge
 
 | Module | Commande | Rôle |
 | :--- | :--- | :--- |
-| [forge](https://git.qtrn.io/tycho/tycho-forge) | `tycho forge` | Pull requests, issues, miroirs sur Forgejo, GitHub, GitLab, Bitbucket |
-| [containers](https://git.qtrn.io/tycho/tycho-containers) | `tycho containers` | Déploiements Podman sur un seul hôte, à partir des recettes du catalogue |
-| [orchestration](https://git.qtrn.io/tycho/tycho-orchestration) | `tycho orchestration` | Déploiements Kubernetes à partir des recettes du catalogue |
-| [knowledge](https://git.qtrn.io/tycho/tycho-knowledge) | `tycho knowledge` | Curation et synchronisation au format OKF (Open Knowledge Format) |
-| [security](https://git.qtrn.io/tycho/tycho-security) | `tycho security`, `tycho sec` | Audits de sécurité du code et des déploiements |
+| [forge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/forge) | `tycho forge` | Pull requests, issues, miroirs sur Forgejo, GitHub, GitLab, Bitbucket |
+| [containers](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/containers) | `tycho containers` | Déploiements Podman sur un seul hôte, à partir des recettes du catalogue |
+| [orchestration](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/orchestration) | `tycho orchestration` | Déploiements Kubernetes à partir des recettes du catalogue |
+| [knowledge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/knowledge) | `tycho knowledge` | Curation et synchronisation au format OKF (Open Knowledge Format) |
+| [security](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/security) | `tycho security`, `tycho sec` | Audits de sécurité du code et des déploiements |
 
 Les modules sont installés dans `~/.local/share/tycho/modules` (mode utilisateur) ou
 `/usr/local/share/tycho/modules` (en root), avec un `modules.lock` qui enregistre chaque version

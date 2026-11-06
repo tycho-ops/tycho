@@ -13,7 +13,7 @@ updated: 2026-11-05T21:30:00Z
 > **Statut** : Acceptée le 2026-11-05 (amendements : §3 réseau public et parcours d'installation guidé, §4quinquies modules en paquets npm, §5 modes Podman légers et Kubernetes local, §8 GitHub et artefacts, §9 priorités)
 > **Auteur** : crapougnax
 > **Date** : 2026-10-24
-> **Périmètre** : `Tycho/*` (modules), catalogue de recettes, dépôts d'instance (`<org>/<engine>-<provider>-<cible>`), `AGENTS.okf`
+> **Périmètre** : `tycho/*` (cœur et modules), catalogue de recettes, dépôts d'instance (`<org>/<engine>-<provider>-<cible>`), `AGENTS.okf`
 
 ---
 
@@ -78,9 +78,9 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | N0 Savoir | Tout le savoir en OKF, indexé, interrogeable à la voix | Selon la source | `tycho knowledge` + dépôts OKF |
 | N1 Règles | Fiches OKF atomiques, rangées par piliers (Usine logicielle, Déploiement, Cybersécurité) | Public | `AGENTS.okf` |
-| N2 Gate | Implémentation mécanique des règles vérifiables | Public | `Tycho/tycho-security`, `Tycho/tycho-forge` |
-| N3 Recettes | Catalogue officiel, catalogues tiers déclarés, descripteurs `.tycho/` | **Selon le dépôt** : public ou privé (cf. §4quater) | `Tycho/catalog`, catalogues tiers, `<repo>/.tycho/` |
-| N4 Moteurs | Rendu et application des recettes sur une cible | Public | `Tycho/tycho-orchestration`, `Tycho/tycho-containers` |
+| N2 Gate | Implémentation mécanique des règles vérifiables | Public | `tycho/modules` (`security`, `forge`) |
+| N3 Recettes | Catalogue officiel, catalogues tiers déclarés, descripteurs `.tycho/` | **Selon le dépôt** : public ou privé (cf. §4quater) | `tycho/catalog`, catalogues tiers, `<repo>/.tycho/` |
+| N4 Moteurs | Rendu et application des recettes sur une cible | Public | `tycho/modules` (`orchestration`, `containers`) |
 | N5 Cibles | Paramètres, sélection, secrets chiffrés — un dépôt par cible | **Privé** | `<org>/<engine>-<provider>-<cible>` |
 
 Conséquence directe : **la frontière « instance / générique » passe entre N3 et N5**. Une recette ne contient jamais d'élément d'instance, qu'elle soit publique ou privée ; le gate (N2) le vérifie. La visibilité d'un dépôt de recettes est une propriété distincte (§4quater).
@@ -103,7 +103,7 @@ spec:
   domain: example.com
   catalogs:                     # catalogue officiel implicite ; catalogues tiers explicites
     - name: tycho
-      url: https://git.qtrn.io/Tycho/catalog.git
+      url: https://git.qtrn.io/tycho/catalog.git
       ref: v1.4.0               # tag, jamais une branche en production
     - name: acme-recipes        # catalogue partenaire sous accord, même format
       url: https://git.example.org/acme/tycho-catalog.git
@@ -170,7 +170,7 @@ L'installation d'une cible (`tycho orchestration init|apply <cible>`) est un **p
 
 | Source | Pour quoi | Où |
 | :--- | :--- | :--- |
-| **Catalogue** | Services populaires dont les éditeurs ne fourniront pas de recette Tycho (Traefik, Forgejo, Keycloak, ChirpStack, Postfix, Shlink, Loki…) | `Tycho/catalog` |
+| **Catalogue** | Services populaires dont les éditeurs ne fourniront pas de recette Tycho (Traefik, Forgejo, Keycloak, ChirpStack, Postfix, Shlink, Loki…) | `tycho/catalog` |
 | **Descripteur `.tycho/`** | Services développés en interne ou par des tiers qui adoptent Tycho : le dépôt **se décrit lui-même** | `<repo>/.tycho/` |
 
 Les deux suivent **le même contrat** (§4.1, §4.2) : une cible peut combiner des stacks du catalogue et des stacks issues de dépôts. Un descripteur peut aussi déclarer des **plugins** pour des stacks du catalogue (ex. un thème Keycloak livré avec l'application).
@@ -282,7 +282,7 @@ Exemple de cible combinant un catalogue public et un catalogue privé :
 spec:
   catalogs:
     - name: tycho
-      url: https://git.qtrn.io/Tycho/catalog.git
+      url: https://git.qtrn.io/tycho/catalog.git
       ref: v1.0.0
       access: { method: anonymous }
     - name: acme-products
@@ -507,14 +507,14 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 | Dépôt | Rôle | Visibilité |
 | :--- | :--- | :--- |
 | `AGENTS.okf` | Règles (N1) | Public |
-| `Tycho/tycho` | Dispatcher + RFC transverses | Public |
-| `Tycho/tycho-{forge,containers,orchestration,knowledge,security}` | Modules, publiés en paquets `@tycho/<module>` sur `qtrn.io` (`@tycho:registry=https://qtrn.io/`, §4quinquies) | Public |
-| `Tycho/catalog` | Catalogue officiel des services populaires (N3) ; d'autres catalogues tiers au même format peuvent être déclarés (§3) | Public |
+| `tycho/tycho` | Dispatcher + RFC transverses | Public |
+| `tycho/modules` | Monorepo des modules officiels (`modules/<module>`, tags `@tycho/<module>@X.Y.Z`), publiés en paquets `@tycho/<module>` sur `qtrn.io` (`@tycho:registry=https://qtrn.io/`, §4quinquies) | Public |
+| `tycho/catalog` | Catalogue officiel des services populaires (N3) ; d'autres catalogues tiers au même format peuvent être déclarés (§3) | Public |
 | `<repo>/.tycho/` | Recettes des services d'un dépôt applicatif (N3) | Celle du dépôt |
 | `<org>/compliance` *(proposé)* | Documents OKF de préparation à la certification, registres d'incident | Privé |
 | `<org>/<engine>-<provider>-<cible>` | Dépôt de cible (N5) : un dépôt par cible, nommé `<org>/<engine>-<provider>-<cible>` | Privé |
 | Anciennes copies des recettes (locales, GitHub) | Copies historiques | **À archiver** |
-| Anciennes recettes Podman (Compose) | Ancêtre de `tycho containers` | À reprendre dans `Tycho/catalog`, puis archiver |
+| Anciennes recettes Podman (Compose) | Ancêtre de `tycho containers` | À reprendre dans `tycho/catalog`, puis archiver |
 
 **GitHub** *(amendement du 2026-11-05)* : la source de vérité est `git.qtrn.io`. GitHub ne garde, pour la visibilité, que des **miroirs publics en lecture seule** des dépôts publics (miroir push depuis Forgejo, issues et PR désactivées, description renvoyant vers `git.qtrn.io`). **Aucun artefact** n'y est publié (ni release, ni paquet, ni image) : binaires, paquets npm, `.deb` et images sont publiés uniquement sur l'infrastructure qtrn.io (registres de paquets de Forgejo sur `git.qtrn.io`, exposés sur le domaine nu : `qtrn.io/@<scope>/…` pour npm, `qtrn.io/v2` pour les images, et `qtrn.io/deb/<org>` à venir). Le nettoyage se fait au fur et à mesure des migrations : un dépôt GitHub n'est archivé ou remplacé par un miroir qu'après vérification que tout son contenu utile existe sur `git.qtrn.io`.
 
@@ -522,7 +522,7 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 
 ## 9. Plan de migration
 
-> **Priorités (2026-11-05)** : la séparation des dépôts (phase 2 : `Tycho/catalog` public à historique neuf, dépôt de cible privé, recettes retirées du dépôt de cible) passe avant tout le reste. Les modes Podman légers et le Kubernetes local (§5) suivent la phase 4 et peuvent être reportés.
+> **Priorités (2026-11-05)** : la séparation des dépôts (phase 2 : `tycho/catalog` public à historique neuf, dépôt de cible privé, recettes retirées du dépôt de cible) passe avant tout le reste. Les modes Podman légers et le Kubernetes local (§5) suivent la phase 4 et peuvent être reportés.
 
 | Phase | Contenu | Critère de sortie |
 | :--- | :--- | :--- |
@@ -551,7 +551,7 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 
 ## 11. Questions ouvertes
 
-- **Décidé** : catalogue officiel `Tycho/catalog`, catalogues partenaires sous accord (§3, §4ter) ; dépôts de cible `<org>/<engine>-<provider>-<cible>`, un par déploiement (§3, confirmé le 2026-11-05) ; écosystème fermé : extensions `official` ou `partner` signées, `dev` en sandbox uniquement ; signature SSH (git) + minisign (artefacts) (§4ter) ; Kapsule chiffre les `Secret` au repos (§6) ; parcours beginner / intermediate / expert, étiquettes de contexte (§7.2) ; modes sandbox / standard / hardened affichés à chaque invite, journal chaîné (§7ter). *2026-11-05* : catalogue publié dans un dépôt neuf, sans l'historique du dépôt d'instance ; modes Podman `quadlet-system` (recommandé), `quadlet-user` et `compose` (déconseillé, généré) ; kind et k3s via un fournisseur `local` (§5) ; GitHub en miroirs publics en lecture seule (§8) ; modules en paquets npm `@tycho/*` exécutés par le cœur, versions repartant de 1.0.0 (§4quinquies) ; tous les artefacts uniquement sur qtrn.io.
+- **Décidé** : catalogue officiel `tycho/catalog`, catalogues partenaires sous accord (§3, §4ter) ; dépôts de cible `<org>/<engine>-<provider>-<cible>`, un par déploiement (§3, confirmé le 2026-11-05) ; écosystème fermé : extensions `official` ou `partner` signées, `dev` en sandbox uniquement ; signature SSH (git) + minisign (artefacts) (§4ter) ; Kapsule chiffre les `Secret` au repos (§6) ; parcours beginner / intermediate / expert, étiquettes de contexte (§7.2) ; modes sandbox / standard / hardened affichés à chaque invite, journal chaîné (§7ter). *2026-11-05* : catalogue publié dans un dépôt neuf, sans l'historique du dépôt d'instance ; modes Podman `quadlet-system` (recommandé), `quadlet-user` et `compose` (déconseillé, généré) ; kind et k3s via un fournisseur `local` (§5) ; GitHub en miroirs publics en lecture seule (§8) ; modules en paquets npm `@tycho/*` exécutés par le cœur, versions repartant de 1.0.0 (§4quinquies) ; tous les artefacts uniquement sur qtrn.io.
 - Modèle d'accord partenaire : périmètre, durée, référentiel de certification exigé par région, obligations de sécurité (audit statique, SBOM, délai de correctif CVE), suivi de validité des certifications, conditions de suspension et de retrait.
 - Granularité des preuves de conformité (par commit, par release, par cible) — à affiner, l'étiquette de contexte étant acquise.
 - Correspondance par défaut entre parcours de maturité et mode d'exécution.
