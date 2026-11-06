@@ -7,7 +7,8 @@
 
 import { createContext, CORE_VERSION } from "./core/context";
 import { runModule } from "./modules/runner";
-import { findModuleForCommand, installModule, readLock, removeModule } from "./modules/store";
+import { findModuleForCommand, installModule, linkModule, readLock, removeModule } from "./modules/store";
+import { addTarget, extractTargetFlag, readTargets, removeTarget, resolveTarget, useTarget } from "./core/targets";
 
 /** Official modules, shown by `tycho help` and suggested when a command is unknown. */
 const OFFICIAL_MODULES: Record<string, string> = {
@@ -42,8 +43,16 @@ Core commands:
   module add <name>[@<range>]   Install or upgrade a module from ${ctx.registry}
   module list                   List installed modules
   module remove <name>          Remove a module
+  module link <dir>             Use a module from a local working copy (development)
+  context list                  List targets (* = current)
+  context add <dir>             Register a target repository (name read from its target.yaml)
+  context use <name>            Select the current target
+  context current               Print the current target
+  context remove <name>         Forget a target (its repository is left untouched)
   version                       Print the core version
   help                          Show this help
+
+Every module command accepts --target <name> (else TYCHO_TARGET, else the current target).
 
 Modules:`);
    for (const [name, description] of Object.entries(OFFICIAL_MODULES)) {
@@ -96,7 +105,65 @@ async function moduleCommand(args: string[]): Promise<number> {
       }
       return 0;
    }
-   console.error(`${RED}Unknown action "${action}".${RESET} Actions: add, list, remove`);
+   if (action === "link") {
+      if (targets.length !== 1) {
+         console.error(`${RED}Usage:${RESET} tycho module link <dir>`);
+         return 2;
+      }
+      const entry = linkModule(ctx, targets[0]);
+      console.log(`${GREEN}✔${RESET} ${entry.package}@${entry.version} ${DIM}(${entry.resolved})${RESET}`);
+      return 0;
+   }
+   console.error(`${RED}Unknown action "${action}".${RESET} Actions: add, link, list, remove`);
+   return 2;
+}
+
+/**
+ * Handles `tycho context <action> ...`: the targets shared by every module.
+ * @param args Arguments after `context`.
+ * @returns Exit code.
+ */
+function contextCommand(args: string[]): number {
+   const [action, value] = args;
+   if (!action || action === "list") {
+      const content = readTargets(ctx.env);
+      const names = Object.keys(content.targets).sort();
+      if (names.length === 0) {
+         console.log("No target registered. Example: tycho context add ~/src/acme/k8s-scaleway-prod");
+         return 0;
+      }
+      for (const name of names) {
+         const entry = content.targets[name];
+         const mark = name === content.current ? `${GREEN}*${RESET}` : " ";
+         console.log(`${mark} ${name.padEnd(28)} ${entry.engine.padEnd(11)} ${DIM}${entry.path}${RESET}`);
+      }
+      return 0;
+   }
+   if (action === "add" && value) {
+      const entry = addTarget(value, ctx.env);
+      console.log(`${GREEN}✔${RESET} ${entry.name} (${entry.engine}) ${DIM}${entry.path}${RESET}`);
+      return 0;
+   }
+   if (action === "use" && value) {
+      useTarget(value, ctx.env);
+      console.log(`Current target: ${BOLD}${value}${RESET}`);
+      return 0;
+   }
+   if (action === "remove" && value) {
+      removeTarget(value, ctx.env);
+      console.log(`${GREEN}✔${RESET} forgot ${value}`);
+      return 0;
+   }
+   if (action === "current") {
+      const selection = resolveTarget(undefined, ctx.env);
+      if (!selection.target) {
+         console.error(selection.error);
+         return 1;
+      }
+      console.log(`${selection.target.name} ${DIM}(${selection.target.engine}, ${selection.target.path})${RESET}`);
+      return 0;
+   }
+   console.error(`${RED}Usage:${RESET} tycho context list | add <dir> | use <name> | current | remove <name>`);
    return 2;
 }
 
@@ -116,9 +183,13 @@ async function main(): Promise<number> {
    if (command === "module") {
       return moduleCommand(rest);
    }
+   if (command === "context") {
+      return contextCommand(rest);
+   }
    const moduleName = findModuleForCommand(ctx, command);
    if (moduleName) {
-      return runModule(ctx, moduleName, command, rest);
+      const { args, target } = extractTargetFlag(rest);
+      return runModule(ctx, moduleName, command, args, resolveTarget(target, ctx.env));
    }
    if (command in OFFICIAL_MODULES || command === "sec") {
       const name = command === "sec" ? "security" : command;

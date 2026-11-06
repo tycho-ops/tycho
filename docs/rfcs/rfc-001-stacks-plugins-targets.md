@@ -142,6 +142,16 @@ Principes :
 
 ---
 
+### Cibles multiples *(amendement du 2026-11-06)*
+
+Un même `tycho` gère plusieurs cibles. Leur liste appartient au **cœur**, pas aux modules :
+`tycho context add <dépôt>` enregistre une cible sous le nom lu dans son `target.yaml`
+(`metadata.name`) avec son moteur (`spec.engine`) ; `tycho context use <nom>` choisit la cible
+courante. Chaque commande de module reçoit du cœur la cible sélectionnée (`--target <nom>`, sinon
+`TYCHO_TARGET`, sinon la cible courante ; jamais de choix implicite) et ne traite que les cibles de
+son moteur (`orchestration` : kubernetes, `containers` : podman). Les modules transverses
+(`security`, `cost`, `dashboard`) utilisent la même sélection.
+
 ### Réseau public de la cible *(amendement du 2026-11-06)*
 
 Trois paramètres réseau, déclarés dans `spec.network` :

@@ -46,6 +46,29 @@ Modules are installed in `~/.local/share/tycho/modules` (user mode) or
 `/usr/local/share/tycho/modules` (as root), with a `modules.lock` recording each version and its
 integrity.
 
+## Targets
+
+A target is a deployment environment (a Kubernetes cluster or a Podman host) described by the
+`target.yaml` of its own repository (RFC-001 §3). One `tycho` manages several targets, and every
+module acts on the selected one:
+
+```bash
+tycho context add ~/src/acme/k8s-scaleway-prod     # name read from its target.yaml
+tycho context add ~/src/acme/podman-baremetal-edge
+tycho context list
+tycho context use acme-prod
+tycho orchestration plan                            # current target
+tycho orchestration status --target acme-edge       # or TYCHO_TARGET=acme-edge
+```
+
+Selection order: `--target <name>`, then `TYCHO_TARGET`, then the current target; Tycho never
+guesses. Targets are kept in `~/.config/tycho/targets.json`.
+
+## Module development
+
+`tycho module link <dir>` uses a module from a local working copy (a built module whose
+`package.json` declares the `tycho` contract), instead of a published version.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -53,6 +76,8 @@ integrity.
 | `TYCHO_REGISTRY` | `https://qtrn.io/` | npm registry serving `@tycho/*` (mirror, air-gapped site) |
 | `TYCHO_REGISTRY_TOKEN` | — | Token for a private registry |
 | `TYCHO_MODULES_DIR` | see above | Where modules are installed |
+| `TYCHO_CONFIG_DIR` | `~/.config/tycho` | Where targets are registered |
+| `TYCHO_TARGET` | — | Target of the command, instead of the current one |
 | `NO_COLOR` | — | Disables colours |
 
 ## Design
