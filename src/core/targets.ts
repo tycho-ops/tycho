@@ -321,16 +321,21 @@ export function extractSelectionFlags(args: string[]): { args: string[] } & Sele
 }
 
 /**
- * Reads the selection options placed before the command: `-c <org>:<context>` (or `-c <context>`,
- * `--context`, `--target`) and `-o <org>` (`--org`).
+ * Reads the options placed before the command: `-c <org>:<context>` (or `-c <context>`,
+ * `--context`, `--target`), `-o <org>` (`--org`) and `-q` (`--quiet`, no banner).
  * @param argv Arguments after `tycho`.
  * @returns The selection and the arguments from the command on.
  */
-export function extractLeadingSelection(argv: string[]): { rest: string[] } & Selection {
+export function extractLeadingSelection(argv: string[]): { rest: string[]; quiet: boolean } & Selection {
    const found: Selection = { target: undefined, org: undefined };
+   let quiet = false;
    let i = 0;
    for (; i < argv.length; i++) {
       const arg = argv[i];
+      if (arg === "-q" || arg === "--quiet") {
+         quiet = true;
+         continue;
+      }
       const match = /^(-c|-o|--context|--target|--org)(?:=(.*))?$/.exec(arg);
       if (!match) {
          break;
@@ -339,7 +344,7 @@ export function extractLeadingSelection(argv: string[]): { rest: string[] } & Se
       const value = match[2] ?? argv[++i];
       setOnce(found, key, value, match[1]);
    }
-   return { rest: argv.slice(i), ...found };
+   return { rest: argv.slice(i), quiet, ...found };
 }
 
 /**

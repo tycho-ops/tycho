@@ -75,6 +75,16 @@ Sélection : organisation `--org`, sinon `TYCHO_ORG`, sinon l'organisation coura
 Tycho ne devine jamais. `metadata.organization` dans `target.yaml` rattache une cible à son
 organisation. Les cibles sont enregistrées dans `~/.config/tycho/targets.json`.
 
+## Bandeau et confirmations
+
+Chaque commande de module affiche d'abord, sur stderr, l'organisation et le contexte sur lesquels
+elle agit (`tycho · acme:production (kubernetes)`). Pour le masquer : `-q` avant la commande,
+`TYCHO_BANNER=0`, ou durablement `tycho config set banner off`.
+
+Chaque action destructive demande confirmation, en nommant l'organisation et le contexte. Sans
+terminal, la réponse est non, sauf si `TYCHO_ASSUME_YES=1` est posé volontairement (CI). Les modules
+reçoivent cette confirmation sous la forme `ctx.confirm(action)`.
+
 ## Développement de modules
 
 `tycho module link <dossier>` utilise un module depuis une copie de travail locale (un module

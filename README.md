@@ -74,6 +74,16 @@ Selection: organisation `--org`, else `TYCHO_ORG`, else the current one; target 
 guesses. `metadata.organization` in `target.yaml` pins a target to its organisation. Targets are
 kept in `~/.config/tycho/targets.json`.
 
+## Banner and confirmations
+
+Every module command first prints, on stderr, the organisation and context it acts on
+(`tycho · acme:production (kubernetes)`). Hide it with `-q` before the command, `TYCHO_BANNER=0`, or
+for good with `tycho config set banner off`.
+
+Every destructive action asks for confirmation, naming the organisation and context. Without a
+terminal the answer is no, unless `TYCHO_ASSUME_YES=1` is set on purpose (CI). Modules receive this
+confirmation as `ctx.confirm(action)`.
+
 ## Module development
 
 `tycho module link <dir>` uses a module from a local working copy (a built module whose

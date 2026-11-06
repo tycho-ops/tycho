@@ -70,9 +70,9 @@ describe("organisations and targets shared by every module", () => {
 
    test("short selection before the command: -c org:context, -o org", () => {
       expect(parseTargetRef("acme:production")).toEqual({ org: "acme", name: "production" });
-      expect(extractLeadingSelection(["-c", "acme:production", "orchestration", "plan", "-c", "x"])).toEqual({ rest: ["orchestration", "plan", "-c", "x"], target: "acme:production", org: undefined });
-      expect(extractLeadingSelection(["-o", "acme", "--context=edge", "status"])).toEqual({ rest: ["status"], target: "edge", org: "acme" });
-      expect(extractLeadingSelection(["forge", "commit", "-o"])).toEqual({ rest: ["forge", "commit", "-o"], target: undefined, org: undefined });
+      expect(extractLeadingSelection(["-c", "acme:production", "orchestration", "plan", "-c", "x"])).toEqual({ rest: ["orchestration", "plan", "-c", "x"], quiet: false, target: "acme:production", org: undefined });
+      expect(extractLeadingSelection(["-o", "acme", "-q", "--context=edge", "status"])).toEqual({ rest: ["status"], quiet: true, target: "edge", org: "acme" });
+      expect(extractLeadingSelection(["forge", "commit", "-o"])).toEqual({ rest: ["forge", "commit", "-o"], quiet: false, target: undefined, org: undefined });
       expect(() => extractLeadingSelection(["-c"])).toThrow(/needs a value/);
       expect(() => extractLeadingSelection(["-c", "-o", "x"])).toThrow(/needs a value/);
       expect(mergeSelection({ target: "acme:production", org: undefined }, { target: undefined, org: "acme" })).toEqual({ target: "acme:production", org: "acme" });
@@ -105,7 +105,7 @@ describe("module link and target hand-over", () => {
 
       const repo = targetRepo(root, "acme-prod", "kubernetes");
       addTarget(repo, ctx.env);
-      expect(await runModule(ctx, "orchestration", "orchestration", ["status"], resolveTarget(undefined, ctx.env))).toBe(0);
+      expect(await runModule(ctx, "orchestration", "orchestration", ["status"], resolveTarget(undefined, ctx.env), async () => false)).toBe(0);
       const seen = (globalThis as unknown as { __seen: { args: string[]; target: { name: string }; error: null; env: string } }).__seen;
       expect(seen).toMatchObject({ args: ["status"], target: { org: "default", name: "acme-prod", id: "default/acme-prod", engine: "kubernetes" }, error: null, env: repo });
    });

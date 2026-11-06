@@ -6,6 +6,7 @@
  */
 
 import { createContext, CORE_VERSION } from "./core/context";
+import { bannerEnabled, bannerText, makeConfirm, readSettings, setSetting } from "./core/interaction";
 import { runModule } from "./modules/runner";
 import { findModuleForCommand, installModule, linkModule, readLock, removeModule } from "./modules/store";
 import {
@@ -42,6 +43,7 @@ const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
 const ctx = createContext(process.env, isRoot);
 const token = process.env.TYCHO_REGISTRY_TOKEN || undefined;
 const leading = extractLeadingSelection(process.argv.slice(2));
+const interactive = Boolean(process.stdin.isTTY);
 const [command, ...rest] = leading.rest;
 
 /** Prints the general help. */
@@ -49,7 +51,7 @@ function printHelp(): void {
    const lock = readLock(ctx);
    console.log(`${BOLD}Tycho ${CORE_VERSION}${RESET} ${DIM}(${ctx.mode} mode)${RESET}
 
-Usage: tycho [-c <org>:<context>] [-o <org>] <command> [arguments]
+Usage: tycho [-c <org>:<context>] [-o <org>] [-q] <command> [arguments]
 
 Core commands:
   module add <name>[@<range>]   Install or upgrade a module from ${ctx.registry}
@@ -64,6 +66,7 @@ Core commands:
   context use <name|org/name>   Select the current target
   context current               Print the current target
   context remove <name|org/name> Forget a target (its repository is left untouched)
+  config list | set banner on|off   Settings (banner: org and context before each command)
   version                       Print the core version
   help                          Show this help
 
@@ -71,6 +74,9 @@ Selection, for every module command:
   tycho -c <org>:<context> <command> ...   short form, before the command (-c <context>, -o <org>)
   --context|--target <name|org:name>, --org <org>   anywhere
   else TYCHO_TARGET / TYCHO_ORG, else the current organisation and target.
+Each module command first prints the organisation and context (-q, TYCHO_BANNER=0 or
+tycho config set banner off to hide it). Destructive actions ask for confirmation
+(TYCHO_ASSUME_YES=1 to confirm without a terminal, in CI).
 
 Modules:`);
    for (const [name, description] of Object.entries(OFFICIAL_MODULES)) {
@@ -118,6 +124,10 @@ async function moduleCommand(args: string[]): Promise<number> {
          return 2;
       }
       for (const name of targets) {
+         if (!(await makeConfirm(null, ctx.env, interactive)(`Remove module ${name}`))) {
+            console.error(`${name}: not removed`);
+            continue;
+         }
          const removed = removeModule(ctx, name);
          console.log(removed ? `${GREEN}✔${RESET} removed ${name}` : `${name} was not installed`);
       }
@@ -175,7 +185,7 @@ function orgCommand(args: string[]): number {
  * @param argv Arguments after `context` (may hold --org, and --all for list).
  * @returns Exit code.
  */
-function contextCommand(argv: string[]): number {
+async function contextCommand(argv: string[]): Promise<number> {
    const all = argv.includes("--all");
    const { args, org: trailingOrg } = extractSelectionFlags(argv.filter((a) => a !== "--all"));
    const orgFlag = mergeSelection(leading, { target: undefined, org: trailingOrg }).org;
@@ -211,7 +221,12 @@ function contextCommand(argv: string[]): number {
       return 0;
    }
    if (action === "remove" && value) {
-      removeTarget(orgFlag && !value.includes("/") ? `${orgFlag}/${value}` : value, ctx.env);
+      const ref = orgFlag && !value.includes("/") && !value.includes(":") ? `${orgFlag}/${value}` : value;
+      if (!(await makeConfirm(null, ctx.env, interactive)(`Forget target ${ref} (its repository is kept)`))) {
+         console.error(`${ref}: kept`);
+         return 1;
+      }
+      removeTarget(ref, ctx.env);
       console.log(`${GREEN}✔${RESET} forgot ${value}`);
       return 0;
    }
@@ -247,6 +262,21 @@ async function main(): Promise<number> {
    if (command === "context") {
       return contextCommand(rest);
    }
+   if (command === "config") {
+      const [action, key, value] = rest;
+      if (action === "set" && key && value) {
+         setSetting(key, value, ctx.env);
+         console.log(`${GREEN}✔${RESET} ${key} ${value}`);
+         return 0;
+      }
+      if (!action || action === "list") {
+         const settings = readSettings(ctx.env);
+         console.log(`banner ${settings.banner ? "on" : "off"}`);
+         return 0;
+      }
+      console.error(`${RED}Usage:${RESET} tycho config list | set banner on|off`);
+      return 2;
+   }
    if (command === "org") {
       return orgCommand(rest);
    }
@@ -254,7 +284,11 @@ async function main(): Promise<number> {
    if (moduleName) {
       const { args, ...after } = extractSelectionFlags(rest);
       const { target, org } = mergeSelection(leading, after);
-      return runModule(ctx, moduleName, command, args, resolveTarget(target, ctx.env, org));
+      const selection = resolveTarget(target, ctx.env, org);
+      if (bannerEnabled(leading.quiet, ctx.env)) {
+         console.error(`${DIM}${bannerText(resolveOrg(org, ctx.env), selection)}${RESET}`);
+      }
+      return runModule(ctx, moduleName, command, args, selection, makeConfirm(selection, ctx.env, interactive));
    }
    if (command in OFFICIAL_MODULES || command === "sec") {
       const name = command === "sec" ? "security" : command;

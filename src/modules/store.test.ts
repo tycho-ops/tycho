@@ -9,6 +9,7 @@ import { extractTgz } from "./tar";
 import type { TargetResolution } from "../core/targets";
 
 const NO_TARGET: TargetResolution = { target: null, error: "no target selected" };
+const NO_CONFIRM = async () => false;
 import { makeTgz, startFakeRegistry } from "./testing";
 
 const forge = (version: string, extra: Record<string, unknown> = {}) => ({
@@ -83,8 +84,8 @@ describe("commands and execution", () => {
    test("resolves aliases and runs the module in-process", async () => {
       await installModule(ctx, "security");
       expect(findModuleForCommand(ctx, "sec")).toBe("security");
-      expect(await runModule(ctx, "security", "sec", [], NO_TARGET)).toBe(0);
-      expect(await runModule(ctx, "security", "sec", ["3"], NO_TARGET)).toBe(3);
+      expect(await runModule(ctx, "security", "sec", [], NO_TARGET, NO_CONFIRM)).toBe(0);
+      expect(await runModule(ctx, "security", "sec", ["3"], NO_TARGET, NO_CONFIRM)).toBe(3);
    });
 
    test("removes a module and its lock entry", async () => {

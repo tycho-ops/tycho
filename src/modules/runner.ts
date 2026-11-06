@@ -6,6 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import type { CoreContext } from "../core/context";
+import type { Confirm } from "../core/interaction";
 import type { TargetEntry, TargetResolution } from "../core/targets";
 import { type ModulePackage, validateContract } from "./manifest";
 import { ACCEPTED_TRUST, moduleDir } from "./store";
@@ -20,6 +21,11 @@ export interface ModuleRunContext {
    target: TargetEntry | null;
    /** Why there is no target, when `target` is null. */
    targetError: string | null;
+   /**
+    * Asks before a destructive action, naming the target; resolves to true only on an explicit
+    * yes. Without a terminal it resolves to false unless TYCHO_ASSUME_YES=1.
+    */
+   confirm: Confirm;
 }
 
 /** Entry point every module exports. */
@@ -33,10 +39,11 @@ export type ModuleRun = (args: string[], ctx: ModuleRunContext) => Promise<numbe
  * @param command Command typed after `tycho` (main name or alias).
  * @param args Remaining arguments (`--target` already removed).
  * @param selection Target resolved by the core for this command.
+ * @param confirm Confirmation of destructive actions.
  * @returns The exit code returned by the module (0 when it returns nothing).
  * @throws Error when the module is invalid or does not export `run`.
  */
-export async function runModule(ctx: CoreContext, name: string, command: string, args: string[], selection: TargetResolution): Promise<number> {
+export async function runModule(ctx: CoreContext, name: string, command: string, args: string[], selection: TargetResolution, confirm: Confirm): Promise<number> {
    const dir = moduleDir(ctx, name);
    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as ModulePackage;
    validateContract(pkg, ctx.version, ACCEPTED_TRUST);
@@ -59,6 +66,7 @@ export async function runModule(ctx: CoreContext, name: string, command: string,
       env,
       target: selection.target,
       targetError: selection.error,
+      confirm,
    });
    return typeof result === "number" ? result : 0;
 }
