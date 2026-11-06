@@ -1,0 +1,26 @@
+{
+  "name": "@tycho/core",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tycho core: the single executable that installs and runs @tycho/* modules",
+  "author": "Quatrain Technologies",
+  "copyright": "Quatrain Technologies",
+  "license": "AGPL-3.0-only",
+  "repository": "https://git.qtrn.io/tycho/tycho",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p .",
+    "build:local": "bun build --compile --minify src/cli.ts --outfile bin/tycho",
+    "build:linux-amd64": "bun build --compile --minify --target=bun-linux-x64 src/cli.ts --outfile dist/tycho-linux-amd64",
+    "build:linux-arm64": "bun build --compile --minify --target=bun-linux-arm64 src/cli.ts --outfile dist/tycho-linux-arm64",
+    "build:darwin-arm64": "bun build --compile --minify --target=bun-darwin-arm64 src/cli.ts --outfile dist/tycho-darwin-arm64",
+    "build:release": "bun run build:linux-amd64 && bun run build:linux-arm64 && bun run build:darwin-arm64 && bun run build:darwin-amd64 && cd dist && shasum -a 256 tycho-* > SHA256SUMS",
+    "build:darwin-amd64": "bun build --compile --minify --target=bun-darwin-x64 src/cli.ts --outfile dist/tycho-darwin-amd64"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "5.9.3"
+  }
+}
