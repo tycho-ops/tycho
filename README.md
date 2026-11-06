@@ -36,11 +36,11 @@ tycho module remove forge
 
 | Module | Command | Purpose |
 | :--- | :--- | :--- |
-| [forge](https://git.qtrn.io/tycho/tycho-forge) | `tycho forge` | Pull requests, issues, mirrors on Forgejo, GitHub, GitLab, Bitbucket |
-| [containers](https://git.qtrn.io/tycho/tycho-containers) | `tycho containers` | Single-host Podman deployments of catalogue recipes |
-| [orchestration](https://git.qtrn.io/tycho/tycho-orchestration) | `tycho orchestration` | Kubernetes deployments of catalogue recipes |
-| [knowledge](https://git.qtrn.io/tycho/tycho-knowledge) | `tycho knowledge` | Open Knowledge Format (OKF) curation and sync |
-| [security](https://git.qtrn.io/tycho/tycho-security) | `tycho security`, `tycho sec` | Security audits of code and deployments |
+| [forge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/forge) | `tycho forge` | Pull requests, issues, mirrors on Forgejo, GitHub, GitLab, Bitbucket |
+| [containers](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/containers) | `tycho containers` | Single-host Podman deployments of catalogue recipes |
+| [orchestration](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/orchestration) | `tycho orchestration` | Kubernetes deployments of catalogue recipes |
+| [knowledge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/knowledge) | `tycho knowledge` | Open Knowledge Format (OKF) curation and sync |
+| [security](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/security) | `tycho security`, `tycho sec` | Security audits of code and deployments |
 
 Modules are installed in `~/.local/share/tycho/modules` (user mode) or
 `/usr/local/share/tycho/modules` (as root), with a `modules.lock` recording each version and its
