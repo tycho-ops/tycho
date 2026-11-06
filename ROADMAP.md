@@ -22,6 +22,16 @@ Planned work after the 1.0.0 release of the core. The architecture is set by
 
 ## Later
 
+- **`tycho cost`** — a module that queries what the operators charge, through their billing
+  and pricing APIs (Scaleway first, then OVHcloud and the others behind the same interface):
+  - **actual cost**: consumption per project, per target and per resource (nodes, load
+    balancers, IPs, storage, egress), over a period, with the currency and the taxes stated;
+  - **estimate**: the monthly cost of a target before it is created, from its node pools,
+    storage and public IPs, so that `tycho orchestration` can show it with the plan;
+  - **comparison**: the same target priced at several operators and regions.
+
+  Read-only: it uses API keys limited to billing, and never changes a resource. Reports feed
+  `tycho dashboard` and the OKF exports (Markdown, CSV).
 - **`tycho compliance site <domain>`** — a module that audits a public website against the
   regulations that apply to it (GDPR, ePrivacy, French LCEN for a start):
   - **hosting**: where the site and each third-party resource it loads are hosted (IP, AS,

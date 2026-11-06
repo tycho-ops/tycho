@@ -25,6 +25,18 @@ l'[RFC-001](docs/rfcs/rfc-001-stacks-plugins-targets.md) ; cette liste porte sur
 
 ## Plus tard
 
+- **`tycho cost`** — un module qui interroge ce que facturent les opérateurs, via leurs API de
+  facturation et de tarifs (Scaleway d'abord, puis OVHcloud et les autres derrière la même
+  interface) :
+  - **coût réel** : consommation par projet, par cible et par ressource (nœuds, load
+    balancers, IP, stockage, trafic sortant), sur une période, devise et taxes précisées ;
+  - **estimation** : le coût mensuel d'une cible avant sa création, à partir de ses pools de
+    nœuds, de son stockage et de ses IP publiques, pour que `tycho orchestration` l'affiche avec
+    le plan ;
+  - **comparaison** : la même cible chiffrée chez plusieurs opérateurs et régions.
+
+  En lecture seule : il utilise des clés d'API limitées à la facturation et ne modifie aucune
+  ressource. Les rapports alimentent `tycho dashboard` et les exports OKF (Markdown, CSV).
 - **`tycho compliance site <domaine>`** — un module qui audite un site public au regard des
   textes qui s'y appliquent (RGPD, ePrivacy, LCEN pour commencer) :
   - **hébergement** : où sont hébergés le site et chaque ressource tierce qu'il charge (IP, AS,
