@@ -16,7 +16,7 @@
     "build:linux-amd64": "bun build --compile --minify --target=bun-linux-x64 src/cli.ts --outfile dist/tycho-linux-amd64",
     "build:linux-arm64": "bun build --compile --minify --target=bun-linux-arm64 src/cli.ts --outfile dist/tycho-linux-arm64",
     "build:darwin-arm64": "bun build --compile --minify --target=bun-darwin-arm64 src/cli.ts --outfile dist/tycho-darwin-arm64",
-    "build:release": "bun run build:linux-amd64 && bun run build:linux-arm64 && bun run build:darwin-arm64 && bun run build:darwin-amd64 && cd dist && shasum -a 256 tycho-* > SHA256SUMS",
+    "build:release": "bun run build:linux-amd64 && bun run build:linux-arm64 && bun run build:darwin-arm64 && bun run build:darwin-amd64 && bun run scripts/checksums.ts dist",
     "build:darwin-amd64": "bun build --compile --minify --target=bun-darwin-x64 src/cli.ts --outfile dist/tycho-darwin-amd64"
   },
   "devDependencies": {
