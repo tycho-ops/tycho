@@ -46,6 +46,50 @@ Les modules sont installés dans `~/.local/share/tycho/modules` (mode utilisateu
 `/usr/local/share/tycho/modules` (en root), avec un `modules.lock` qui enregistre chaque version
 et son intégrité.
 
+## Organisations et cibles
+
+Une cible est un environnement de déploiement (un cluster Kubernetes ou un hôte Podman) décrit par
+le `target.yaml` de son propre dépôt (RFC-001 §3). Une organisation regroupe les cibles d'une
+instance (un client, une entreprise). Un même `tycho` gère plusieurs organisations et cibles, et
+chaque module agit sur la cible sélectionnée ; avec une seule organisation, tout reste dans
+`default`.
+
+```bash
+tycho context add ~/src/acme/k8s-scaleway-production    # nom et organisation lus dans target.yaml
+tycho context add ~/src/acme/k8s-scaleway-staging
+tycho context add ~/src/globex/k8s-scaleway-production --org globex
+tycho org list
+tycho org use acme
+tycho context use staging                                # acme/staging
+tycho orchestration plan                                 # cible courante
+tycho orchestration status --target globex/production    # ou TYCHO_TARGET, TYCHO_ORG, --org
+tycho -c globex:production orchestration status          # forme courte, avant la commande
+```
+
+Les options courtes se placent **avant** la commande : `-c <org>:<contexte>` (ou `-c <contexte>`
+dans l'organisation courante) et `-o <org>`. Après la commande, `-c` et `-o` appartiennent au module
+(git les utilise) : seules les options longues `--context` (alias `--target`) et `--org` y sont lues.
+
+Sélection : organisation `--org`, sinon `TYCHO_ORG`, sinon l'organisation courante ; cible
+`--target` (`nom` ou `org/nom`), sinon `TYCHO_TARGET`, sinon la cible courante de l'organisation.
+Tycho ne devine jamais. `metadata.organization` dans `target.yaml` rattache une cible à son
+organisation. Les cibles sont enregistrées dans `~/.config/tycho/targets.json`.
+
+## Bandeau et confirmations
+
+Chaque commande de module affiche d'abord, sur stderr, l'organisation et le contexte sur lesquels
+elle agit (`tycho · acme:production (kubernetes)`). Pour le masquer : `-q` avant la commande,
+`TYCHO_BANNER=0`, ou durablement `tycho config set banner off`.
+
+Chaque action destructive demande confirmation, en nommant l'organisation et le contexte. Sans
+terminal, la réponse est non, sauf si `TYCHO_ASSUME_YES=1` est posé volontairement (CI). Les modules
+reçoivent cette confirmation sous la forme `ctx.confirm(action)`.
+
+## Développement de modules
+
+`tycho module link <dossier>` utilise un module depuis une copie de travail locale (un module
+construit dont le `package.json` déclare le contrat `tycho`), à la place d'une version publiée.
+
 ## Configuration
 
 | Variable | Défaut | Rôle |
@@ -53,6 +97,9 @@ et son intégrité.
 | `TYCHO_REGISTRY` | `https://qtrn.io/` | Registre npm servant `@tycho/*` (miroir, site isolé) |
 | `TYCHO_REGISTRY_TOKEN` | — | Jeton pour un registre privé |
 | `TYCHO_MODULES_DIR` | voir ci-dessus | Emplacement des modules |
+| `TYCHO_CONFIG_DIR` | `~/.config/tycho` | Emplacement des cibles enregistrées |
+| `TYCHO_ORG` | — | Organisation de la commande, à la place de l'organisation courante |
+| `TYCHO_TARGET` | — | Cible de la commande (`nom` ou `org/nom`), à la place de la cible courante |
 | `NO_COLOR` | — | Désactive les couleurs |
 
 ## Conception

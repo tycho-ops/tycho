@@ -3,8 +3,8 @@
  * @license AGPL-3.0-only
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { dirname, join, resolve } from "path";
 import type { CoreContext } from "../core/context";
 import { MODULE_SCOPE } from "../core/context";
 import { assertIntegrity } from "./integrity";
@@ -123,6 +123,43 @@ export async function installModule(ctx: CoreContext, spec: string, token?: stri
    } finally {
       rmSync(staging, { recursive: true, force: true });
    }
+}
+
+/**
+ * Links a module from a local working copy (development): the module directory becomes a
+ * symbolic link to it, so a rebuild is picked up without reinstalling. The contract is checked
+ * as for a published module; the lock records `link:<path>` instead of an integrity.
+ * @param ctx Core context.
+ * @param path Local module directory (holding its package.json and built entry point).
+ * @returns The lock entry written.
+ * @throws Error when the directory is not a valid module of the official scope.
+ */
+export function linkModule(ctx: CoreContext, path: string): LockEntry {
+   const source = resolve(path);
+   const pkg = JSON.parse(readFileSync(join(source, "package.json"), "utf-8")) as ModulePackage;
+   const contract = validateContract(pkg, ctx.version, ACCEPTED_TRUST);
+   if (pkg.name !== `${MODULE_SCOPE}/${contract.module}`) {
+      throw new Error(`${pkg.name} does not match module "${contract.module}" of scope ${MODULE_SCOPE}`);
+   }
+   if (!existsSync(join(source, pkg.main as string))) {
+      throw new Error(`${join(source, pkg.main as string)} not found: build the module first`);
+   }
+   const target = moduleDir(ctx, contract.module);
+   mkdirSync(dirname(target), { recursive: true });
+   rmSync(target, { recursive: true, force: true });
+   symlinkSync(source, target, "dir");
+   const entry: LockEntry = {
+      package: pkg.name,
+      version: pkg.version,
+      integrity: "link",
+      resolved: `link:${source}`,
+      commands: contract.commands,
+      installedAt: new Date().toISOString(),
+   };
+   const lock = readLock(ctx);
+   lock[contract.module] = entry;
+   writeLock(ctx, lock);
+   return entry;
 }
 
 /**

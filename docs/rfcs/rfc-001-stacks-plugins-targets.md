@@ -142,6 +142,23 @@ Principes :
 
 ---
 
+### Organisations et cibles multiples *(amendement du 2026-11-06)*
+
+Un même `tycho` gère plusieurs **organisations** (une par instance : un client, une entreprise),
+chacune avec plusieurs **cibles**. Leur liste appartient au **cœur**, pas aux modules :
+`tycho context add <dépôt>` enregistre une cible sous le nom lu dans son `target.yaml`
+(`metadata.name`), dans l'organisation qu'il déclare (`metadata.organization`, sinon `--org`, sinon
+l'organisation courante), avec son moteur (`spec.engine`). L'identifiant unique d'une cible sur un
+poste est `org/nom` : deux organisations peuvent avoir chacune une cible `production`. Un
+utilisateur mono-organisation reste sur `default` sans jamais en parler.
+
+Sélection, sans jamais de choix implicite : organisation `--org`, sinon `TYCHO_ORG`, sinon
+l'organisation courante (`tycho org use`) ; cible `--target` (`nom` ou `org/nom`), sinon
+`TYCHO_TARGET`, sinon la cible courante de l'organisation (`tycho context use`). Chaque module reçoit
+du cœur la cible sélectionnée et ne traite que celles de son moteur (`orchestration` : kubernetes,
+`containers` : podman) ; les modules transverses (`security`, `cost`, `dashboard`) utilisent la même
+sélection.
+
 ### Réseau public de la cible *(amendement du 2026-11-06)*
 
 Trois paramètres réseau, déclarés dans `spec.network` :
