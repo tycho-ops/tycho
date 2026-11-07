@@ -28,6 +28,9 @@ Planned work after the 1.0.0 release of the core. The architecture is set by
     balancers, IPs, storage, egress), over a period, with the currency and the taxes stated;
   - **estimate**: the monthly cost of a target before it is created, from its node pools,
     storage and public IPs, so that `tycho orchestration` can show it with the plan;
+  - **per tenant**: on a target shared by several tenants, the cost of each one (share of the
+    node capacity requested by its namespaces, its volumes, buckets and, when it has one, its
+    dedicated load balancer and IP), from the tenant label of its namespaces;
   - **comparison**: the same target priced at several operators and regions.
 
   Read-only: it uses API keys limited to billing, and never changes a resource. Reports feed

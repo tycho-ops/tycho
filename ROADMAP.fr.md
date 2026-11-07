@@ -33,6 +33,9 @@ l'[RFC-001](docs/rfcs/rfc-001-stacks-plugins-targets.md) ; cette liste porte sur
   - **estimation** : le coût mensuel d'une cible avant sa création, à partir de ses pools de
     nœuds, de son stockage et de ses IP publiques, pour que `tycho orchestration` l'affiche avec
     le plan ;
+  - **par tenant** : sur une cible partagée par plusieurs tenants, le coût de chacun (part de la
+    capacité des nœuds demandée par ses namespaces, ses volumes, ses buckets et, s'il en a un,
+    son load balancer et son IP dédiés), d'après le label de tenant de ses namespaces ;
   - **comparaison** : la même cible chiffrée chez plusieurs opérateurs et régions.
 
   En lecture seule : il utilise des clés d'API limitées à la facturation et ne modifie aucune
