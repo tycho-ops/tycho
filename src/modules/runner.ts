@@ -6,6 +6,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import type { CoreContext } from "../core/context";
+import type { Confirm } from "../core/interaction";
+import type { TargetEntry, TargetResolution } from "../core/targets";
 import { type ModulePackage, validateContract } from "./manifest";
 import { ACCEPTED_TRUST, moduleDir } from "./store";
 
@@ -15,6 +17,15 @@ export interface ModuleRunContext {
    mode: CoreContext["mode"];
    command: string;
    env: Record<string, string>;
+   /** Target selected for this command (`--target`, TYCHO_TARGET or current), or null. */
+   target: TargetEntry | null;
+   /** Why there is no target, when `target` is null. */
+   targetError: string | null;
+   /**
+    * Asks before a destructive action, naming the target; resolves to true only on an explicit
+    * yes. Without a terminal it resolves to false unless TYCHO_ASSUME_YES=1.
+    */
+   confirm: Confirm;
 }
 
 /** Entry point every module exports. */
@@ -26,11 +37,13 @@ export type ModuleRun = (args: string[], ctx: ModuleRunContext) => Promise<numbe
  * @param ctx Core context.
  * @param name Module name.
  * @param command Command typed after `tycho` (main name or alias).
- * @param args Remaining arguments.
+ * @param args Remaining arguments (`--target` already removed).
+ * @param selection Target resolved by the core for this command.
+ * @param confirm Confirmation of destructive actions.
  * @returns The exit code returned by the module (0 when it returns nothing).
  * @throws Error when the module is invalid or does not export `run`.
  */
-export async function runModule(ctx: CoreContext, name: string, command: string, args: string[]): Promise<number> {
+export async function runModule(ctx: CoreContext, name: string, command: string, args: string[], selection: TargetResolution, confirm: Confirm): Promise<number> {
    const dir = moduleDir(ctx, name);
    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as ModulePackage;
    validateContract(pkg, ctx.version, ACCEPTED_TRUST);
@@ -38,11 +51,22 @@ export async function runModule(ctx: CoreContext, name: string, command: string,
    if (typeof entry.run !== "function") {
       throw new Error(`${pkg.name} does not export a run(args, ctx) function`);
    }
+   const env = { ...ctx.env };
+   if (selection.target) {
+      env.TYCHO_TARGET_ORG = selection.target.org;
+      env.TYCHO_TARGET_ID = selection.target.id;
+      env.TYCHO_TARGET_NAME = selection.target.name;
+      env.TYCHO_TARGET_PATH = selection.target.path;
+      env.TYCHO_TARGET_ENGINE = selection.target.engine;
+   }
    const result = await (entry.run as ModuleRun)(args, {
       coreVersion: ctx.version,
       mode: ctx.mode,
       command,
-      env: ctx.env,
+      env,
+      target: selection.target,
+      targetError: selection.error,
+      confirm,
    });
    return typeof result === "number" ? result : 0;
 }

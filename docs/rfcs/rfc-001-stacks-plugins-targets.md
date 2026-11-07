@@ -13,7 +13,7 @@ updated: 2026-11-05T21:30:00Z
 > **Statut** : Acceptée le 2026-11-05 (amendements : §3 réseau public et parcours d'installation guidé, §4quinquies modules en paquets npm, §5 modes Podman légers et Kubernetes local, §8 GitHub et artefacts, §9 priorités)
 > **Auteur** : crapougnax
 > **Date** : 2026-10-24
-> **Périmètre** : `Tycho/*` (modules), catalogue de recettes, dépôts d'instance (`<org>/<engine>-<provider>-<cible>`), `AGENTS.okf`
+> **Périmètre** : `tycho/*` (cœur et modules), catalogue de recettes, dépôts d'instance (`<org>/<engine>-<provider>-<cible>`), `AGENTS.okf`
 
 ---
 
@@ -41,10 +41,15 @@ Cette RFC fixe le **cadre** à plusieurs niveaux. Les choix d'implémentation fe
 | **Module** | Sous-fonction de la CLI Tycho, paquet npm `@tycho/<module>` chargé et exécuté par le cœur `tycho` (§4quinquies) | `forge`, `containers`, `orchestration`, `knowledge`, `security` |
 | **Stack** | Installation spécifique d'un logiciel, décrite par une recette générique et paramétrable | `traefik`, `forgejo`, `keycloak`, `lorawan`, `mail`, `shlink` |
 | **Plugin** | Addendum à une stack : modifie ou étend une stack existante, n'existe pas seul | `traefik/forward-auth`, `traefik/crowdsec`, `traefik/access-logs`, `keycloak/theme-<org>` |
-| **Cible** (*target*) | Environnement d'exécution d'une instance : un cluster Kubernetes **ou** un hôte Podman | `eu1-paris` (k8s), `edge-01` (podman) |
+| **Cible** (*target*) | Environnement d'exécution d'une instance : un cluster Kubernetes **ou** une machine Podman | `eu1-paris` (k8s), `edge-01` (podman) |
 | **Recette** (*recipe*) | Définition générique d'une stack ou d'un plugin, sans aucune valeur d'instance | `catalog/stacks/forgejo/`, `<repo>/.tycho/` |
 | **Descripteur `.tycho/`** | Dossier à la racine d'un dépôt applicatif décrivant le ou les services qu'il rend déployables, et leurs recettes | `acme/shop/.tycho/` |
 | **Instance** | Ensemble des cibles d'une organisation et de leur configuration (paramètres + secrets) | `acme/k8s-scaleway-eu1-paris` |
+| **Organisation** | Celui pour qui l'opérateur gère des cibles ; regroupe les cibles dans `tycho` (§3, *Organisations et cibles multiples*) | `acme`, `default` |
+| **Host** (*hébergeur*) | Organisation qui **opère** une cible : infrastructure (IP, réseau, cluster), services partagés (ingress, TLS, SSO, GitOps) et périmètre accordé à chaque tenant | `acme` sur `acme/k8s-scaleway-eu1-paris` |
+| **Tenant** (*hébergé*) | Organisation dont les charges tournent sur la cible d'un host, pilotées depuis **son propre dépôt**, dans le périmètre que le host lui accorde | `globex` sur la cible de `acme` |
+
+Host et tenant sont deux **modes imbriqués**, pas deux sortes d'organisations : une cible a **un** host et zéro, un ou plusieurs tenants ; une même organisation peut être host de ses cibles et tenant sur celle d'un autre (§3, *Host et tenants*). « Hôte » n'est jamais employé pour une machine : on dit *machine Podman*.
 
 Règle : **une recette ne contient jamais** de domaine, d'IP, de nom de cible, d'identifiant ou de secret. Tout ce qui varie d'une instance à l'autre est un **paramètre**.
 
@@ -78,9 +83,9 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | N0 Savoir | Tout le savoir en OKF, indexé, interrogeable à la voix | Selon la source | `tycho knowledge` + dépôts OKF |
 | N1 Règles | Fiches OKF atomiques, rangées par piliers (Usine logicielle, Déploiement, Cybersécurité) | Public | `AGENTS.okf` |
-| N2 Gate | Implémentation mécanique des règles vérifiables | Public | `Tycho/tycho-security`, `Tycho/tycho-forge` |
-| N3 Recettes | Catalogue officiel, catalogues tiers déclarés, descripteurs `.tycho/` | **Selon le dépôt** : public ou privé (cf. §4quater) | `Tycho/catalog`, catalogues tiers, `<repo>/.tycho/` |
-| N4 Moteurs | Rendu et application des recettes sur une cible | Public | `Tycho/tycho-orchestration`, `Tycho/tycho-containers` |
+| N2 Gate | Implémentation mécanique des règles vérifiables | Public | `tycho/modules` (`security`, `forge`) |
+| N3 Recettes | Catalogue officiel, catalogues tiers déclarés, descripteurs `.tycho/` | **Selon le dépôt** : public ou privé (cf. §4quater) | `tycho/catalog`, catalogues tiers, `<repo>/.tycho/` |
+| N4 Moteurs | Rendu et application des recettes sur une cible | Public | `tycho/modules` (`orchestration`, `containers`) |
 | N5 Cibles | Paramètres, sélection, secrets chiffrés — un dépôt par cible | **Privé** | `<org>/<engine>-<provider>-<cible>` |
 
 Conséquence directe : **la frontière « instance / générique » passe entre N3 et N5**. Une recette ne contient jamais d'élément d'instance, qu'elle soit publique ou privée ; le gate (N2) le vérifie. La visibilité d'un dépôt de recettes est une propriété distincte (§4quater).
@@ -103,7 +108,7 @@ spec:
   domain: example.com
   catalogs:                     # catalogue officiel implicite ; catalogues tiers explicites
     - name: tycho
-      url: https://git.qtrn.io/Tycho/catalog.git
+      url: https://git.qtrn.io/tycho/catalog.git
       ref: v1.4.0               # tag, jamais une branche en production
     - name: acme-recipes        # catalogue partenaire sous accord, même format
       url: https://git.example.org/acme/tycho-catalog.git
@@ -142,6 +147,66 @@ Principes :
 
 ---
 
+### Organisations et cibles multiples *(amendement du 2026-11-06)*
+
+Un même `tycho` gère plusieurs **organisations** (une par instance : un client, une entreprise),
+chacune avec plusieurs **cibles**. Leur liste appartient au **cœur**, pas aux modules :
+`tycho context add <dépôt>` enregistre une cible sous le nom lu dans son `target.yaml`
+(`metadata.name`), dans l'organisation qu'il déclare (`metadata.organization`, sinon `--org`, sinon
+l'organisation courante), avec son moteur (`spec.engine`). L'identifiant unique d'une cible sur un
+poste est `org/nom` : deux organisations peuvent avoir chacune une cible `production`. Un
+utilisateur mono-organisation reste sur `default` sans jamais en parler.
+
+Sélection, sans jamais de choix implicite : organisation `--org`, sinon `TYCHO_ORG`, sinon
+l'organisation courante (`tycho org use`) ; cible `--target` (`nom` ou `org/nom`), sinon
+`TYCHO_TARGET`, sinon la cible courante de l'organisation (`tycho context use`). Chaque module reçoit
+du cœur la cible sélectionnée et ne traite que celles de son moteur (`orchestration` : kubernetes,
+`containers` : podman) ; les modules transverses (`security`, `cost`, `dashboard`) utilisent la même
+sélection.
+
+### Host et tenants *(amendement du 2026-11-08)*
+
+Une cible est **opérée par un host** et **accueille des tenants**. Le host est l'organisation dont
+le dépôt de cible contient le `target.yaml` : elle seule décide de l'infrastructure et du
+périmètre de chacun. Un tenant décrit ses stacks dans **son propre dépôt** et ne choisit ni son
+périmètre, ni ses droits, ni l'entrée d'un autre tenant.
+
+Les services de plateforme du host (ingress, TLS, SSO, GitOps, sauvegarde) sont eux-mêmes rangés
+comme ceux d'un tenant : le host est le premier tenant de sa propre cible.
+
+La séparation par tenant a deux objectifs :
+
+1. **Pouvoir séparer la cible le moment venu** : tout le périmètre d'un tenant (dépôt,
+   namespaces, secrets, volumes) est déjà isolé ; il peut partir sur sa propre cible, dont il
+   devient alors le host, sans être démêlé des autres.
+2. **Calculer le coût de chaque tenant** : chaque namespace porte le label `<domaine>/tenant` ;
+   le coût d'un tenant est la part de capacité des nœuds demandée par ses namespaces, plus ses
+   volumes, ses buckets et ses options dédiées (`tycho cost`).
+
+Options par tenant, décidées par le host :
+
+| Option | Défaut | Effet |
+| :--- | :--- | :--- |
+| Load balancer et IP publique dédiés | non (entrée partagée du host) | Entrypoint propre, isolation de ses routes par une politique d'admission, IP réservée dans `public-ips` |
+| Relais SMTP | **oui, propre au tenant** dès qu'il envoie des e-mails | Son compte chez l'opérateur d'e-mail et son domaine d'envoi : quotas et réputation séparés de ceux des autres |
+| Sortie contrôlée | non | Proxy L7 et IP de sortie unique pour ses namespaces |
+
+Dans `target.yaml`, les tenants sont déclarés par le host :
+
+```yaml
+spec:
+  tenants:
+    - name: globex
+      repository: https://git.example.com/globex/k8s-scaleway-eu1-paris.git
+      namespaces: [globex-shop, globex-api]
+      kinds: [ConfigMap, Secret, Service, PersistentVolumeClaim, Deployment, Certificate, IngressRoute]
+      ingress: shared            # shared | dedicated (frontend de spec.network.ingress)
+      mail: { relay: own }       # propre au tenant dès qu'il envoie des e-mails
+```
+
+`tycho orchestration` en génère le contrat GitOps (projet, générateur d'applications, accès en
+lecture à son dépôt, label des namespaces) ; `tycho cost` y lit la répartition des coûts.
+
 ### Réseau public de la cible *(amendement du 2026-11-06)*
 
 Trois paramètres réseau, déclarés dans `spec.network` :
@@ -170,7 +235,7 @@ L'installation d'une cible (`tycho orchestration init|apply <cible>`) est un **p
 
 | Source | Pour quoi | Où |
 | :--- | :--- | :--- |
-| **Catalogue** | Services populaires dont les éditeurs ne fourniront pas de recette Tycho (Traefik, Forgejo, Keycloak, ChirpStack, Postfix, Shlink, Loki…) | `Tycho/catalog` |
+| **Catalogue** | Services populaires dont les éditeurs ne fourniront pas de recette Tycho (Traefik, Forgejo, Keycloak, ChirpStack, Postfix, Shlink, Loki…) | `tycho/catalog` |
 | **Descripteur `.tycho/`** | Services développés en interne ou par des tiers qui adoptent Tycho : le dépôt **se décrit lui-même** | `<repo>/.tycho/` |
 
 Les deux suivent **le même contrat** (§4.1, §4.2) : une cible peut combiner des stacks du catalogue et des stacks issues de dépôts. Un descripteur peut aussi déclarer des **plugins** pour des stacks du catalogue (ex. un thème Keycloak livré avec l'application).
@@ -282,7 +347,7 @@ Exemple de cible combinant un catalogue public et un catalogue privé :
 spec:
   catalogs:
     - name: tycho
-      url: https://git.qtrn.io/Tycho/catalog.git
+      url: https://git.qtrn.io/tycho/catalog.git
       ref: v1.0.0
       access: { method: anonymous }
     - name: acme-products
@@ -507,14 +572,14 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 | Dépôt | Rôle | Visibilité |
 | :--- | :--- | :--- |
 | `AGENTS.okf` | Règles (N1) | Public |
-| `Tycho/tycho` | Dispatcher + RFC transverses | Public |
-| `Tycho/tycho-{forge,containers,orchestration,knowledge,security}` | Modules, publiés en paquets `@tycho/<module>` sur `qtrn.io` (`@tycho:registry=https://qtrn.io/`, §4quinquies) | Public |
-| `Tycho/catalog` | Catalogue officiel des services populaires (N3) ; d'autres catalogues tiers au même format peuvent être déclarés (§3) | Public |
+| `tycho/tycho` | Dispatcher + RFC transverses | Public |
+| `tycho/modules` | Monorepo des modules officiels (`modules/<module>`, tags `@tycho/<module>@X.Y.Z`), publiés en paquets `@tycho/<module>` sur `qtrn.io` (`@tycho:registry=https://qtrn.io/`, §4quinquies) | Public |
+| `tycho/catalog` | Catalogue officiel des services populaires (N3) ; d'autres catalogues tiers au même format peuvent être déclarés (§3) | Public |
 | `<repo>/.tycho/` | Recettes des services d'un dépôt applicatif (N3) | Celle du dépôt |
 | `<org>/compliance` *(proposé)* | Documents OKF de préparation à la certification, registres d'incident | Privé |
 | `<org>/<engine>-<provider>-<cible>` | Dépôt de cible (N5) : un dépôt par cible, nommé `<org>/<engine>-<provider>-<cible>` | Privé |
 | Anciennes copies des recettes (locales, GitHub) | Copies historiques | **À archiver** |
-| Anciennes recettes Podman (Compose) | Ancêtre de `tycho containers` | À reprendre dans `Tycho/catalog`, puis archiver |
+| Anciennes recettes Podman (Compose) | Ancêtre de `tycho containers` | À reprendre dans `tycho/catalog`, puis archiver |
 
 **GitHub** *(amendement du 2026-11-05)* : la source de vérité est `git.qtrn.io`. GitHub ne garde, pour la visibilité, que des **miroirs publics en lecture seule** des dépôts publics (miroir push depuis Forgejo, issues et PR désactivées, description renvoyant vers `git.qtrn.io`). **Aucun artefact** n'y est publié (ni release, ni paquet, ni image) : binaires, paquets npm, `.deb` et images sont publiés uniquement sur l'infrastructure qtrn.io (registres de paquets de Forgejo sur `git.qtrn.io`, exposés sur le domaine nu : `qtrn.io/@<scope>/…` pour npm, `qtrn.io/v2` pour les images, et `qtrn.io/deb/<org>` à venir). Le nettoyage se fait au fur et à mesure des migrations : un dépôt GitHub n'est archivé ou remplacé par un miroir qu'après vérification que tout son contenu utile existe sur `git.qtrn.io`.
 
@@ -522,7 +587,7 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 
 ## 9. Plan de migration
 
-> **Priorités (2026-11-05)** : la séparation des dépôts (phase 2 : `Tycho/catalog` public à historique neuf, dépôt de cible privé, recettes retirées du dépôt de cible) passe avant tout le reste. Les modes Podman légers et le Kubernetes local (§5) suivent la phase 4 et peuvent être reportés.
+> **Priorités (2026-11-05)** : la séparation des dépôts (phase 2 : `tycho/catalog` public à historique neuf, dépôt de cible privé, recettes retirées du dépôt de cible) passe avant tout le reste. Les modes Podman légers et le Kubernetes local (§5) suivent la phase 4 et peuvent être reportés.
 
 | Phase | Contenu | Critère de sortie |
 | :--- | :--- | :--- |
@@ -551,7 +616,7 @@ Chaque action produit un **événement structuré** (JSON lines), y compris en `
 
 ## 11. Questions ouvertes
 
-- **Décidé** : catalogue officiel `Tycho/catalog`, catalogues partenaires sous accord (§3, §4ter) ; dépôts de cible `<org>/<engine>-<provider>-<cible>`, un par déploiement (§3, confirmé le 2026-11-05) ; écosystème fermé : extensions `official` ou `partner` signées, `dev` en sandbox uniquement ; signature SSH (git) + minisign (artefacts) (§4ter) ; Kapsule chiffre les `Secret` au repos (§6) ; parcours beginner / intermediate / expert, étiquettes de contexte (§7.2) ; modes sandbox / standard / hardened affichés à chaque invite, journal chaîné (§7ter). *2026-11-05* : catalogue publié dans un dépôt neuf, sans l'historique du dépôt d'instance ; modes Podman `quadlet-system` (recommandé), `quadlet-user` et `compose` (déconseillé, généré) ; kind et k3s via un fournisseur `local` (§5) ; GitHub en miroirs publics en lecture seule (§8) ; modules en paquets npm `@tycho/*` exécutés par le cœur, versions repartant de 1.0.0 (§4quinquies) ; tous les artefacts uniquement sur qtrn.io.
+- **Décidé** : catalogue officiel `tycho/catalog`, catalogues partenaires sous accord (§3, §4ter) ; dépôts de cible `<org>/<engine>-<provider>-<cible>`, un par déploiement (§3, confirmé le 2026-11-05) ; écosystème fermé : extensions `official` ou `partner` signées, `dev` en sandbox uniquement ; signature SSH (git) + minisign (artefacts) (§4ter) ; Kapsule chiffre les `Secret` au repos (§6) ; parcours beginner / intermediate / expert, étiquettes de contexte (§7.2) ; modes sandbox / standard / hardened affichés à chaque invite, journal chaîné (§7ter). *2026-11-05* : catalogue publié dans un dépôt neuf, sans l'historique du dépôt d'instance ; modes Podman `quadlet-system` (recommandé), `quadlet-user` et `compose` (déconseillé, généré) ; kind et k3s via un fournisseur `local` (§5) ; GitHub en miroirs publics en lecture seule (§8) ; modules en paquets npm `@tycho/*` exécutés par le cœur, versions repartant de 1.0.0 (§4quinquies) ; tous les artefacts uniquement sur qtrn.io.
 - Modèle d'accord partenaire : périmètre, durée, référentiel de certification exigé par région, obligations de sécurité (audit statique, SBOM, délai de correctif CVE), suivi de validité des certifications, conditions de suspension et de retrait.
 - Granularité des preuves de conformité (par commit, par release, par cible) — à affiner, l'étiquette de contexte étant acquise.
 - Correspondance par défaut entre parcours de maturité et mode d'exécution.

@@ -36,15 +36,58 @@ tycho module remove forge
 
 | Module | Command | Purpose |
 | :--- | :--- | :--- |
-| [forge](https://git.qtrn.io/tycho/tycho-forge) | `tycho forge` | Pull requests, issues, mirrors on Forgejo, GitHub, GitLab, Bitbucket |
-| [containers](https://git.qtrn.io/tycho/tycho-containers) | `tycho containers` | Single-host Podman deployments of catalogue recipes |
-| [orchestration](https://git.qtrn.io/tycho/tycho-orchestration) | `tycho orchestration` | Kubernetes deployments of catalogue recipes |
-| [knowledge](https://git.qtrn.io/tycho/tycho-knowledge) | `tycho knowledge` | Open Knowledge Format (OKF) curation and sync |
-| [security](https://git.qtrn.io/tycho/tycho-security) | `tycho security`, `tycho sec` | Security audits of code and deployments |
+| [forge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/forge) | `tycho forge` | Pull requests, issues, mirrors on Forgejo, GitHub, GitLab, Bitbucket |
+| [containers](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/containers) | `tycho containers` | Single-host Podman deployments of catalogue recipes |
+| [orchestration](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/orchestration) | `tycho orchestration` | Kubernetes deployments of catalogue recipes |
+| [knowledge](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/knowledge) | `tycho knowledge` | Open Knowledge Format (OKF) curation and sync |
+| [security](https://git.qtrn.io/tycho/modules/src/branch/develop/modules/security) | `tycho security`, `tycho sec` | Security audits of code and deployments |
 
 Modules are installed in `~/.local/share/tycho/modules` (user mode) or
 `/usr/local/share/tycho/modules` (as root), with a `modules.lock` recording each version and its
 integrity.
+
+## Organisations and targets
+
+A target is a deployment environment (a Kubernetes cluster or a Podman host) described by the
+`target.yaml` of its own repository (RFC-001 §3). An organisation groups the targets of one
+instance (a customer, a company). One `tycho` manages several organisations and targets, and every
+module acts on the selected one; with a single organisation, everything stays in `default`.
+
+```bash
+tycho context add ~/src/acme/k8s-scaleway-production    # name and organisation from target.yaml
+tycho context add ~/src/acme/k8s-scaleway-staging
+tycho context add ~/src/globex/k8s-scaleway-production --org globex
+tycho org list
+tycho org use acme
+tycho context use staging                                # acme/staging
+tycho orchestration plan                                 # current target
+tycho orchestration status --target globex/production    # or TYCHO_TARGET, TYCHO_ORG, --org
+tycho -c globex:production orchestration status          # short form, before the command
+```
+
+Short options go **before** the command: `-c <org>:<context>` (or `-c <context>` in the current
+organisation) and `-o <org>`. After the command, `-c` and `-o` belong to the module (git uses
+them), so only the long options `--context` (alias `--target`) and `--org` are read there.
+
+Selection: organisation `--org`, else `TYCHO_ORG`, else the current one; target `--target`
+(`name` or `org/name`), else `TYCHO_TARGET`, else the organisation's current target. Tycho never
+guesses. `metadata.organization` in `target.yaml` pins a target to its organisation. Targets are
+kept in `~/.config/tycho/targets.json`.
+
+## Banner and confirmations
+
+Every module command first prints, on stderr, the organisation and context it acts on
+(`tycho · acme:production (kubernetes)`). Hide it with `-q` before the command, `TYCHO_BANNER=0`, or
+for good with `tycho config set banner off`.
+
+Every destructive action asks for confirmation, naming the organisation and context. Without a
+terminal the answer is no, unless `TYCHO_ASSUME_YES=1` is set on purpose (CI). Modules receive this
+confirmation as `ctx.confirm(action)`.
+
+## Module development
+
+`tycho module link <dir>` uses a module from a local working copy (a built module whose
+`package.json` declares the `tycho` contract), instead of a published version.
 
 ## Configuration
 
@@ -53,6 +96,9 @@ integrity.
 | `TYCHO_REGISTRY` | `https://qtrn.io/` | npm registry serving `@tycho/*` (mirror, air-gapped site) |
 | `TYCHO_REGISTRY_TOKEN` | — | Token for a private registry |
 | `TYCHO_MODULES_DIR` | see above | Where modules are installed |
+| `TYCHO_CONFIG_DIR` | `~/.config/tycho` | Where targets are registered |
+| `TYCHO_ORG` | — | Organisation of the command, instead of the current one |
+| `TYCHO_TARGET` | — | Target of the command (`name` or `org/name`), instead of the current one |
 | `NO_COLOR` | — | Disables colours |
 
 ## Design
