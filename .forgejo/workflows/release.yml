@@ -1,0 +1,31 @@
+# Release of the core on a tag vX.Y.Z (pushed on main by the maintainer): checks that the tag
+# matches the declared versions, tests, builds the four binaries, and publishes them with
+# SHA256SUMS and install.sh as a release of this repository (git.qtrn.io only).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Tag matches the declared versions
+        run: bun run scripts/check-version.ts "${GITHUB_REF_NAME}"
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run build:release
+      - name: Publish the release
+        env:
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGEJO_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cp install.sh dist/install.sh
+          bun run scripts/publish-release.ts dist/tycho-linux-amd64 dist/tycho-linux-arm64 dist/tycho-darwin-amd64 dist/tycho-darwin-arm64 dist/SHA256SUMS dist/install.sh
