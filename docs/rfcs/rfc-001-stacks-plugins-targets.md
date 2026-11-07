@@ -41,10 +41,15 @@ Cette RFC fixe le **cadre** à plusieurs niveaux. Les choix d'implémentation fe
 | **Module** | Sous-fonction de la CLI Tycho, paquet npm `@tycho/<module>` chargé et exécuté par le cœur `tycho` (§4quinquies) | `forge`, `containers`, `orchestration`, `knowledge`, `security` |
 | **Stack** | Installation spécifique d'un logiciel, décrite par une recette générique et paramétrable | `traefik`, `forgejo`, `keycloak`, `lorawan`, `mail`, `shlink` |
 | **Plugin** | Addendum à une stack : modifie ou étend une stack existante, n'existe pas seul | `traefik/forward-auth`, `traefik/crowdsec`, `traefik/access-logs`, `keycloak/theme-<org>` |
-| **Cible** (*target*) | Environnement d'exécution d'une instance : un cluster Kubernetes **ou** un hôte Podman | `eu1-paris` (k8s), `edge-01` (podman) |
+| **Cible** (*target*) | Environnement d'exécution d'une instance : un cluster Kubernetes **ou** une machine Podman | `eu1-paris` (k8s), `edge-01` (podman) |
 | **Recette** (*recipe*) | Définition générique d'une stack ou d'un plugin, sans aucune valeur d'instance | `catalog/stacks/forgejo/`, `<repo>/.tycho/` |
 | **Descripteur `.tycho/`** | Dossier à la racine d'un dépôt applicatif décrivant le ou les services qu'il rend déployables, et leurs recettes | `acme/shop/.tycho/` |
 | **Instance** | Ensemble des cibles d'une organisation et de leur configuration (paramètres + secrets) | `acme/k8s-scaleway-eu1-paris` |
+| **Organisation** | Celui pour qui l'opérateur gère des cibles ; regroupe les cibles dans `tycho` (§3, *Organisations et cibles multiples*) | `acme`, `default` |
+| **Host** (*hébergeur*) | Organisation qui **opère** une cible : infrastructure (IP, réseau, cluster), services partagés (ingress, TLS, SSO, GitOps) et périmètre accordé à chaque tenant | `acme` sur `acme/k8s-scaleway-eu1-paris` |
+| **Tenant** (*hébergé*) | Organisation dont les charges tournent sur la cible d'un host, pilotées depuis **son propre dépôt**, dans le périmètre que le host lui accorde | `globex` sur la cible de `acme` |
+
+Host et tenant sont deux **modes imbriqués**, pas deux sortes d'organisations : une cible a **un** host et zéro, un ou plusieurs tenants ; une même organisation peut être host de ses cibles et tenant sur celle d'un autre (§3, *Host et tenants*). « Hôte » n'est jamais employé pour une machine : on dit *machine Podman*.
 
 Règle : **une recette ne contient jamais** de domaine, d'IP, de nom de cible, d'identifiant ou de secret. Tout ce qui varie d'une instance à l'autre est un **paramètre**.
 
@@ -158,6 +163,49 @@ l'organisation courante (`tycho org use`) ; cible `--target` (`nom` ou `org/nom`
 du cœur la cible sélectionnée et ne traite que celles de son moteur (`orchestration` : kubernetes,
 `containers` : podman) ; les modules transverses (`security`, `cost`, `dashboard`) utilisent la même
 sélection.
+
+### Host et tenants *(amendement du 2026-11-08)*
+
+Une cible est **opérée par un host** et **accueille des tenants**. Le host est l'organisation dont
+le dépôt de cible contient le `target.yaml` : elle seule décide de l'infrastructure et du
+périmètre de chacun. Un tenant décrit ses stacks dans **son propre dépôt** et ne choisit ni son
+périmètre, ni ses droits, ni l'entrée d'un autre tenant.
+
+Les services de plateforme du host (ingress, TLS, SSO, GitOps, sauvegarde) sont eux-mêmes rangés
+comme ceux d'un tenant : le host est le premier tenant de sa propre cible.
+
+La séparation par tenant a deux objectifs :
+
+1. **Pouvoir séparer la cible le moment venu** : tout le périmètre d'un tenant (dépôt,
+   namespaces, secrets, volumes) est déjà isolé ; il peut partir sur sa propre cible, dont il
+   devient alors le host, sans être démêlé des autres.
+2. **Calculer le coût de chaque tenant** : chaque namespace porte le label `<domaine>/tenant` ;
+   le coût d'un tenant est la part de capacité des nœuds demandée par ses namespaces, plus ses
+   volumes, ses buckets et ses options dédiées (`tycho cost`).
+
+Options par tenant, décidées par le host :
+
+| Option | Défaut | Effet |
+| :--- | :--- | :--- |
+| Load balancer et IP publique dédiés | non (entrée partagée du host) | Entrypoint propre, isolation de ses routes par une politique d'admission, IP réservée dans `public-ips` |
+| Relais SMTP | **oui, propre au tenant** dès qu'il envoie des e-mails | Son compte chez l'opérateur d'e-mail et son domaine d'envoi : quotas et réputation séparés de ceux des autres |
+| Sortie contrôlée | non | Proxy L7 et IP de sortie unique pour ses namespaces |
+
+Dans `target.yaml`, les tenants sont déclarés par le host :
+
+```yaml
+spec:
+  tenants:
+    - name: globex
+      repository: https://git.example.com/globex/k8s-scaleway-eu1-paris.git
+      namespaces: [globex-shop, globex-api]
+      kinds: [ConfigMap, Secret, Service, PersistentVolumeClaim, Deployment, Certificate, IngressRoute]
+      ingress: shared            # shared | dedicated (frontend de spec.network.ingress)
+      mail: { relay: own }       # propre au tenant dès qu'il envoie des e-mails
+```
+
+`tycho orchestration` en génère le contrat GitOps (projet, générateur d'applications, accès en
+lecture à son dépôt, label des namespaces) ; `tycho cost` y lit la répartition des coûts.
 
 ### Réseau public de la cible *(amendement du 2026-11-06)*
 
