@@ -104,13 +104,10 @@ construit dont le `package.json` déclare le contrat `tycho`), à la place d'une
 
 ## Conception
 
-L'architecture est décrite dans les RFC, en français pour l'instant :
+Les documents de conception sont dans le [wiki](https://git.qtrn.io/tycho/tycho/wiki) :
 
-- [RFC-001](docs/rfcs/rfc-001-stacks-plugins-targets.md) — stacks, plugins et cibles ; modules en
-  paquets npm exécutés par le cœur (§4quinquies) ; parité Kubernetes / Podman
-- [RFC-002](docs/rfcs/rfc-002-gate.md) — Gate (brouillon)
-- [RFC-003](docs/rfcs/rfc-003-ledger.md) — Ledger (brouillon)
-- [Feuille de route](ROADMAP.fr.md)
+- [RFC](https://git.qtrn.io/tycho/tycho/wiki) : stacks, plugins et cibles (RFC-001), Gate (RFC-002), Ledger (RFC-003), risque vulnérabilités (RFC-004)
+- [Feuille de route](https://git.qtrn.io/tycho/tycho/wiki/Roadmap-fr.-)
 
 ## Développement
 
