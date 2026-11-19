@@ -103,13 +103,10 @@ confirmation as `ctx.confirm(action)`.
 
 ## Design
 
-The architecture is described in the RFCs, in French for now:
+The design documents live in the [wiki](https://git.qtrn.io/tycho/tycho/wiki):
 
-- [RFC-001](docs/rfcs/rfc-001-stacks-plugins-targets.md) — stacks, plugins and targets; modules as
-  npm packages run by the core (§4quinquies); Kubernetes / Podman parity
-- [RFC-002](docs/rfcs/rfc-002-gate.md) — Gate (draft)
-- [RFC-003](docs/rfcs/rfc-003-ledger.md) — Ledger (draft)
-- [Roadmap](ROADMAP.md)
+- [RFCs](https://git.qtrn.io/tycho/tycho/wiki) (in French for now): stacks, plugins and targets (RFC-001), Gate (RFC-002), Ledger (RFC-003), vulnerability risk (RFC-004)
+- [Roadmap](https://git.qtrn.io/tycho/tycho/wiki/Roadmap)
 
 ## Development
 
